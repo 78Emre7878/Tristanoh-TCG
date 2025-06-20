@@ -1,189 +1,124 @@
-import React, { useState, useEffect } from 'react';
-import io from 'socket.io-client';
+import React, { useEffect, useState } from "react";
+import io from "socket.io-client";
 
 const socket = io();
 
 function App() {
-  const [name, setName] = useState('');
-  const [inputName, setInputName] = useState('');
-  const [lobbyPlayers, setLobbyPlayers] = useState([]);
+  const [name, setName] = useState("");
+  const [inLobby, setInLobby] = useState(false);
+  const [players, setPlayers] = useState([]);
   const [roomId, setRoomId] = useState(null);
-  const [roomPlayers, setRoomPlayers] = useState([]);
-  const [error, setError] = useState('');
-  const [ready, setReady] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
+  const [readyPlayers, setReadyPlayers] = useState([]);
   const [gameState, setGameState] = useState(null);
 
   useEffect(() => {
-    socket.on('lobbyUpdate', (players) => {
-      setLobbyPlayers(players);
+    socket.on("lobbyUpdate", (lobbyPlayers) => {
+      setPlayers(lobbyPlayers);
     });
 
-    socket.on('roomCreated', ({ id, players }) => {
+    socket.on("roomCreated", ({ id, players }) => {
       setRoomId(id);
-      setRoomPlayers(players);
-      setError('');
+      setPlayers(players);
     });
 
-    socket.on('roomJoined', ({ id, players }) => {
+    socket.on("roomJoined", ({ id, players }) => {
       setRoomId(id);
-      setRoomPlayers(players);
-      setError('');
+      setPlayers(players);
     });
 
-    socket.on('roomLeft', () => {
+    socket.on("roomLeft", () => {
       setRoomId(null);
-      setRoomPlayers([]);
-      setReady(false);
-      setGameStarted(false);
       setGameState(null);
+      setReadyPlayers([]);
+      setInLobby(true);
     });
 
-    socket.on('errorMessage', (msg) => {
-      setError(msg);
+    socket.on("readyStatus", (readyList) => {
+      setReadyPlayers(readyList);
     });
 
-    socket.on('gameStarted', (state) => {
-      setGameStarted(true);
-      setGameState(state);
-    });
-
-    socket.on('gameStateUpdate', (state) => {
+    socket.on("gameStarted", (state) => {
       setGameState(state);
     });
 
     return () => {
-      socket.off('lobbyUpdate');
-      socket.off('roomCreated');
-      socket.off('roomJoined');
-      socket.off('roomLeft');
-      socket.off('errorMessage');
-      socket.off('gameStarted');
-      socket.off('gameStateUpdate');
+      socket.off();
     };
   }, []);
 
   const joinLobby = () => {
-    if (inputName.trim()) {
-      setName(inputName.trim());
-      socket.emit('joinLobby', inputName.trim());
-    }
+    if (!name) return;
+    socket.emit("joinLobby", name);
+    setInLobby(true);
   };
 
   const createRoom = () => {
-    socket.emit('createRoom');
+    socket.emit("createRoom");
   };
 
-  const joinRoom = (id) => {
-    socket.emit('joinRoom', id);
+  const joinRoom = (hostName) => {
+    socket.emit("joinRoom", hostName);
   };
 
   const leaveRoom = () => {
-    if (roomId) {
-      socket.emit('leaveRoom');
-    }
+    socket.emit("leaveRoom");
   };
 
-  const markReady = () => {
-    socket.emit('playerReady', roomId);
-    setReady(true);
+  const toggleReady = () => {
+    socket.emit("playerReady", roomId);
   };
-
-  const renderCard = (card) => {
-    if (!card) return null;
-    return (
-      <div style={{
-        border: '1px solid black',
-        borderRadius: '8px',
-        padding: '8px',
-        margin: '4px',
-        display: 'inline-block',
-        backgroundColor: card.color === 'red' ? '#fdd' : '#ddd',
-        fontWeight: 'bold',
-        minWidth: '40px',
-        textAlign: 'center'
-      }}>
-        {card.value}
-      </div>
-    );
-  };
-
-  if (!name) {
-    return (
-      <div style={{ padding: 20 }}>
-        <h1>Tristano TCG Online</h1>
-        <p>Gib deinen Namen ein:</p>
-        <input value={inputName} onChange={e => setInputName(e.target.value)} />
-        <button onClick={joinLobby}>Zur Lobby</button>
-      </div>
-    );
-  }
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Tristano TCG Online</h1>
-      <p>Status: {roomId ? `Im Raum: ${roomId}` : 'In der Lobby'}</p>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      {!roomId && (
-        <>
-          <button onClick={createRoom}>Neuen Raum erstellen</button>
-          <h2>Lobby (Spieler ohne Raum):</h2>
+      {!inLobby ? (
+        <div>
+          <h1>Tristano TCG</h1>
+          <input
+            placeholder="Dein Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button onClick={joinLobby}>Lobby betreten</button>
+        </div>
+      ) : roomId ? (
+        <div>
+          <h2>Raum: {roomId}</h2>
+          <p>Spieler im Raum: {players.join(", ")}</p>
+          <p>Bereit: {readyPlayers.join(", ")}</p>
+          {gameState ? (
+            <div>
+              <h3>Spiel gestartet</h3>
+              <p>Du bist: {name}</p>
+              <p>Zug: {gameState.turn}</p>
+              <p>Phase: {gameState.phase}</p>
+              <h4>Handkarten:</h4>
+              <ul>
+                {(gameState.hands[name] || []).map((card, i) => (
+                  <li key={i}>{card.wert} ({card.farbe})</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <>
+              <button onClick={toggleReady}>Bereit</button>
+              <button onClick={leaveRoom}>Raum verlassen</button>
+            </>
+          )}
+        </div>
+      ) : (
+        <div>
+          <h2>Lobby</h2>
+          <p>Spieler online:</p>
           <ul>
-            {lobbyPlayers.map(p => (
+            {players.map((p) => (
               <li key={p}>
-                {p}{' '}
-                {p !== name && (
-                  <button onClick={() => joinRoom(p)}>Raum betreten</button>
-                )}
+                {p}
+                {p !== name && <button onClick={() => joinRoom(p)}>Beitreten</button>}
               </li>
             ))}
           </ul>
-        </>
-      )}
-
-      {roomId && (
-        <>
-          <h2>Spielraum: {roomId}</h2>
-          <p>Spieler im Raum:</p>
-          <ul>
-            {roomPlayers.map(p => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-
-          {!gameStarted ? (
-            <>
-              <p>Bereit zum Start?</p>
-              {!ready ? (
-                <button onClick={markReady}>Ich bin bereit</button>
-              ) : (
-                <p>Warte auf anderen Spieler...</p>
-              )}
-              <button onClick={leaveRoom}>Raum verlassen</button>
-            </>
-          ) : (
-            <>
-              <h3>🃏 Das Spiel läuft!</h3>
-              {gameState && (
-                <div>
-                  <h4>Runde: {gameState.round}</h4>
-                  <h4>Spieler:</h4>
-                  <ul>
-                    {gameState.players.map(p => (
-                      <li key={p.name}>
-                        {p.name} – Karten: {p.hand.length}
-                      </li>
-                    ))}
-                  </ul>
-                  <h4>Oberste Karte im Stapel:</h4>
-                  {renderCard(gameState.stack[gameState.stack.length - 1])}
-                </div>
-              )}
-              <button onClick={leaveRoom}>Spiel verlassen</button>
-            </>
-          )}
-        </>
+          <button onClick={createRoom}>Neuen Raum erstellen</button>
+        </div>
       )}
     </div>
   );
