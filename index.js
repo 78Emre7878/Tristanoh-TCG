@@ -19,11 +19,9 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, "frontend", "build")));
 
 // Catch-all für React-Routing (muss nach allen API-/Socket-Routen stehen!)
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+app.get("/", (req, res) => {
+  res.send("Backend läuft!");
 });
-
-
 
 // Socket.io Setup
 io.on("connection", (socket) => {
