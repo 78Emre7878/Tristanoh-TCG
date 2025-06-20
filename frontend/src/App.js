@@ -15,17 +15,22 @@ function App() {
   const [gameState, setGameState] = useState(null);
 
   useEffect(() => {
-    socket.on('lobbyUpdate', (players) => setLobbyPlayers(players));
+    socket.on('lobbyUpdate', (players) => {
+      setLobbyPlayers(players);
+    });
+
     socket.on('roomCreated', ({ id, players }) => {
       setRoomId(id);
       setRoomPlayers(players);
       setError('');
     });
+
     socket.on('roomJoined', ({ id, players }) => {
       setRoomId(id);
       setRoomPlayers(players);
       setError('');
     });
+
     socket.on('roomLeft', () => {
       setRoomId(null);
       setRoomPlayers([]);
@@ -33,10 +38,17 @@ function App() {
       setGameStarted(false);
       setGameState(null);
     });
-    socket.on('errorMessage', (msg) => setError(msg));
+
+    socket.on('errorMessage', (msg) => {
+      setError(msg);
+    });
 
     socket.on('gameStarted', (state) => {
       setGameStarted(true);
+      setGameState(state);
+    });
+
+    socket.on('gameStateUpdate', (state) => {
       setGameState(state);
     });
 
@@ -47,6 +59,7 @@ function App() {
       socket.off('roomLeft');
       socket.off('errorMessage');
       socket.off('gameStarted');
+      socket.off('gameStateUpdate');
     };
   }, []);
 
@@ -57,12 +70,42 @@ function App() {
     }
   };
 
-  const createRoom = () => socket.emit('createRoom');
-  const joinRoom = (id) => socket.emit('joinRoom', id);
-  const leaveRoom = () => roomId && socket.emit('leaveRoom');
+  const createRoom = () => {
+    socket.emit('createRoom');
+  };
+
+  const joinRoom = (id) => {
+    socket.emit('joinRoom', id);
+  };
+
+  const leaveRoom = () => {
+    if (roomId) {
+      socket.emit('leaveRoom');
+    }
+  };
+
   const markReady = () => {
     socket.emit('playerReady', roomId);
     setReady(true);
+  };
+
+  const renderCard = (card) => {
+    if (!card) return null;
+    return (
+      <div style={{
+        border: '1px solid black',
+        borderRadius: '8px',
+        padding: '8px',
+        margin: '4px',
+        display: 'inline-block',
+        backgroundColor: card.color === 'red' ? '#fdd' : '#ddd',
+        fontWeight: 'bold',
+        minWidth: '40px',
+        textAlign: 'center'
+      }}>
+        {card.value}
+      </div>
+    );
   };
 
   if (!name) {
@@ -121,20 +164,22 @@ function App() {
             </>
           ) : (
             <>
-              <h2>🃏 Das Spiel läuft!</h2>
-              <p><strong>Phase:</strong> {gameState.phase}</p>
-              <p><strong>Am Zug:</strong> {gameState.turn}</p>
-              <div style={{ display: 'flex', gap: '2rem' }}>
-                {roomPlayers.map((player) => (
-                  <div key={player}>
-                    <h3>{player}</h3>
-                    <p><strong>Karten im Deck:</strong> {gameState.decks[player]?.length ?? 0}</p>
-                    <p><strong>Handkarten:</strong> {gameState.hands[player].length}</p>
-                  </div>
-                ))}
-              </div>
-              <h3>❖ Spielfeld</h3>
-              <p>{gameState.field.length} Karten auf dem Feld</p>
+              <h3>🃏 Das Spiel läuft!</h3>
+              {gameState && (
+                <div>
+                  <h4>Runde: {gameState.round}</h4>
+                  <h4>Spieler:</h4>
+                  <ul>
+                    {gameState.players.map(p => (
+                      <li key={p.name}>
+                        {p.name} – Karten: {p.hand.length}
+                      </li>
+                    ))}
+                  </ul>
+                  <h4>Oberste Karte im Stapel:</h4>
+                  {renderCard(gameState.stack[gameState.stack.length - 1])}
+                </div>
+              )}
               <button onClick={leaveRoom}>Spiel verlassen</button>
             </>
           )}
