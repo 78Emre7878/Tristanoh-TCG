@@ -13,12 +13,10 @@ const io = new Server(server, {
 });
 
 app.use(cors());
+app.use(express.static(path.join(__dirname, "build"))); // Build direkt im backend/build
 
-// 🔧 Richtiger Pfad zum React-Build:
-app.use(express.static(path.join(__dirname, "build")));
-
-const lobby = new Map();
-const rooms = new Map();
+const lobby = new Map(); // socket.id => name
+const rooms = new Map(); // roomId => { players: [], ready: Set(), gameState: {...} }
 
 io.on("connection", (socket) => {
   console.log("🟢 Client verbunden:", socket.id);
@@ -120,7 +118,7 @@ io.on("connection", (socket) => {
   }
 });
 
-// Spielzustand und Decks
+// ========== SPIELZUSTAND ==========
 function createGameState(players) {
   const redDeck = generateTristanoDeck("rot");
   const blackDeck = generateTristanoDeck("schwarz");
@@ -143,11 +141,13 @@ function createGameState(players) {
 
 function generateTristanoDeck(farbe) {
   const werte = ["4", "5", "6", "7", "8", "9", "10", "Bube", "Dame", "König", "Ass"];
-  const deck = [];
+  let deck = [];
+
   werte.forEach((wert) => {
     deck.push({ farbe, wert });
     deck.push({ farbe, wert });
   });
+
   deck.push({ farbe, wert: "Joker" });
   return deck;
 }
@@ -161,9 +161,9 @@ function shuffle(array) {
   return array;
 }
 
-// Catch-All für React Routing
+// React-Build ausliefern
 app.get("*", (req, res) => {
- res.sendFile(path.join(__dirname, "build", "index.html"));
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
