@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3002');
+const socket = io(); // Für Heroku automatisch korrekte URL
+const emreName = "Emre"; // ❗ Später durch Eingabe ersetzbar
 
 function App() {
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
@@ -10,19 +11,29 @@ function App() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    socket.on('connect', () => {
+      socket.emit('joinLobby', emreName);
+    });
+
     socket.on('lobbyUpdate', (players) => {
       setLobbyPlayers(players);
     });
 
-    socket.on('roomCreated', (id) => {
+    socket.on('roomCreated', ({ id, players }) => {
       setRoomId(id);
-      setRoomPlayers([socket.id]);
+      setRoomPlayers(players);
       setError('');
     });
 
-    socket.on('roomJoined', (players) => {
+    socket.on('roomJoined', ({ id, players }) => {
+      setRoomId(id);
       setRoomPlayers(players);
       setError('');
+    });
+
+    socket.on('roomLeft', () => {
+      setRoomId(null);
+      setRoomPlayers([]);
     });
 
     socket.on('errorMessage', (msg) => {
@@ -30,9 +41,11 @@ function App() {
     });
 
     return () => {
+      socket.off('connect');
       socket.off('lobbyUpdate');
       socket.off('roomCreated');
       socket.off('roomJoined');
+      socket.off('roomLeft');
       socket.off('errorMessage');
     };
   }, []);
@@ -41,54 +54,22 @@ function App() {
     socket.emit('createRoom');
   };
 
-  const joinRoom = (id) => {
-    socket.emit('joinRoom', id);
+  const joinRoom = (hostName) => {
+    socket.emit('joinRoom', hostName);
   };
 
   const leaveRoom = () => {
-    if (roomId) {
-      socket.emit('leaveRoom', roomId);
-      setRoomId(null);
-      setRoomPlayers([]);
-    }
+    socket.emit('leaveRoom');
   };
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Tristano TCG Online Prototyp</h1>
-      <p>Status: {roomId ? `Im Raum: ${roomId}` : 'In der Lobby'}</p>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <h1>🎴 Tristano TCG Online Prototyp</h1>
+      <p>Status: {roomId ? `🧩 Im Raum: ${roomId}` : '🏠 In der Lobby'}</p>
+      {error && <p style={{ color: 'red' }}>Fehler: {error}</p>}
 
       {!roomId && (
         <>
-          <button onClick={createRoom}>Neuen Raum erstellen</button>
-          <h2>Lobby (Spieler ohne Raum):</h2>
-          <ul>
-            {lobbyPlayers.map(p => (
-              <li key={p}>
-                {p} {' '}
-                <button onClick={() => joinRoom(p)}>Raum betreten</button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {roomId && (
-        <>
-          <h2>Spielraum: {roomId}</h2>
-          <p>Spieler im Raum:</p>
-          <ul>
-            {roomPlayers.map(p => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-          <button onClick={leaveRoom}>Raum verlassen</button>
-          {roomPlayers.length === 2 && <p>Spiel kann gestartet werden!</p>}
-        </>
-      )}
-    </div>
-  );
-}
-
-export default App;
+          <p>Angemeldet als: <strong>{emreName}</strong></p>
+          <button onClick={createRoom}>➕ Neuen Raum erstellen</button>
+          <h2>⚔️ Verfügbare
