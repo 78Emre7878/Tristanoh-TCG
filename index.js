@@ -86,3 +86,6 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
   console.log(`Server läuft auf Port ${PORT}`);
 });
+app.get('*', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
+});
