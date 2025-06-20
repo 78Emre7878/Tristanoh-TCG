@@ -13,7 +13,9 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(express.static(path.join(__dirname, "build"))); // Build direkt im backend/build
+
+// ⚠️ Statische Dateien der React-App aus frontend/build bereitstellen
+app.use(express.static(path.join(__dirname, "../frontend/build")));
 
 const lobby = new Map(); // socket.id => name
 const rooms = new Map(); // roomId => { players: [], ready: Set(), gameState: {...} }
@@ -118,7 +120,7 @@ io.on("connection", (socket) => {
   }
 });
 
-// ========== SPIELZUSTAND ==========
+// Spielzustand und Decks erstellen
 function createGameState(players) {
   const redDeck = generateTristanoDeck("rot");
   const blackDeck = generateTristanoDeck("schwarz");
@@ -161,9 +163,9 @@ function shuffle(array) {
   return array;
 }
 
-// React-Build ausliefern
+// 🔁 Fallback: Bei allen unbekannten Routen die React-App liefern
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+  res.sendFile(path.join(__dirname, "../frontend/build", "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
