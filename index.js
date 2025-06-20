@@ -9,21 +9,24 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3002", // dein Frontend
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
 
-const PORT = 3002;
+const PORT = process.env.PORT || 3002;
 
-let lobby = new Set();  // Spieler in Lobby (socket ids)
-let rooms = {};         // Räume mit Spielern: { roomId: [socketId1, socketId2] }
+app.get('/', (req, res) => {
+  res.send('Tristano TCG Backend läuft');
+});
+
+let lobby = new Set();
+let rooms = {};
 
 io.on('connection', (socket) => {
   console.log(`Neuer Spieler verbunden: ${socket.id}`);
   lobby.add(socket.id);
 
-  // Lobby-Update an alle senden
   io.emit('lobbyUpdate', Array.from(lobby));
 
   socket.on('createRoom', () => {
@@ -84,5 +87,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Server läuft auf http://localhost:${PORT}`);
+  console.log(`Server läuft auf Port ${PORT}`);
 });
