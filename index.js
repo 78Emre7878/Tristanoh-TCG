@@ -2,33 +2,28 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 app.use(cors());
+app.use(express.static("public")); // <-- wichtig für dein index.html
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // für Tests auch von anderen Domains
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
 
 const PORT = process.env.PORT || 3002;
 
-// Test-Endpunkt für Browserzugriff
-app.get('/', (req, res) => {
-  res.send('Tristano Backend läuft ✔');
-});
-
-// Socket.IO-Logik
 let lobby = new Set();
 let rooms = {};
 
 io.on('connection', (socket) => {
   console.log(`Neuer Spieler verbunden: ${socket.id}`);
   lobby.add(socket.id);
-
   io.emit('lobbyUpdate', Array.from(lobby));
 
   socket.on('createRoom', () => {
@@ -88,7 +83,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Starte den Server
 server.listen(PORT, () => {
   console.log(`Server läuft auf Port ${PORT}`);
 });
