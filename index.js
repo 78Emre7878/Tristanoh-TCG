@@ -9,17 +9,19 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "*", // für Tests auch von anderen Domains
     methods: ["GET", "POST"]
   }
 });
 
 const PORT = process.env.PORT || 3002;
 
+// Test-Endpunkt für Browserzugriff
 app.get('/', (req, res) => {
-  res.send('Tristano TCG Backend läuft');
+  res.send('Tristano Backend läuft ✔');
 });
 
+// Socket.IO-Logik
 let lobby = new Set();
 let rooms = {};
 
@@ -86,6 +88,7 @@ io.on('connection', (socket) => {
   });
 });
 
+// Starte den Server
 server.listen(PORT, () => {
   console.log(`Server läuft auf Port ${PORT}`);
 });
