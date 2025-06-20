@@ -1,66 +1,92 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3001');
+const socket = io('http://localhost:3002');
 
 function App() {
-  const [connected, setConnected] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
+  const [lobbyPlayers, setLobbyPlayers] = useState([]);
+  const [roomId, setRoomId] = useState(null);
+  const [roomPlayers, setRoomPlayers] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    socket.on('connect', () => {
-      setConnected(true);
-      console.log('Verbunden mit Socket-ID:', socket.id);
+    socket.on('lobbyUpdate', (players) => {
+      setLobbyPlayers(players);
     });
 
-    socket.on('disconnect', () => {
-      setConnected(false);
-      console.log('Verbindung getrennt');
+    socket.on('roomCreated', (id) => {
+      setRoomId(id);
+      setRoomPlayers([socket.id]);
+      setError('');
     });
 
-    socket.on('nachricht', (msg) => {
-      setMessages(prev => [...prev, msg]);
+    socket.on('roomJoined', (players) => {
+      setRoomPlayers(players);
+      setError('');
     });
 
-    // Cleanup beim Verlassen der Komponente
+    socket.on('errorMessage', (msg) => {
+      setError(msg);
+    });
+
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('nachricht');
+      socket.off('lobbyUpdate');
+      socket.off('roomCreated');
+      socket.off('roomJoined');
+      socket.off('errorMessage');
     };
   }, []);
 
-  const sendeNachricht = () => {
-    if (input.trim() !== '') {
-      socket.emit('nachricht', input);
-      setInput('');
+  const createRoom = () => {
+    socket.emit('createRoom');
+  };
+
+  const joinRoom = (id) => {
+    socket.emit('joinRoom', id);
+  };
+
+  const leaveRoom = () => {
+    if (roomId) {
+      socket.emit('leaveRoom', roomId);
+      setRoomId(null);
+      setRoomPlayers([]);
     }
   };
 
   return (
-    <div>
+    <div style={{ padding: 20 }}>
       <h1>Tristano TCG Online Prototyp</h1>
-      <p>Status: {connected ? 'Verbunden' : 'Nicht verbunden'}</p>
+      <p>Status: {roomId ? `Im Raum: ${roomId}` : 'In der Lobby'}</p>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
 
-      <div>
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Nachricht eingeben"
-        />
-        <button onClick={sendeNachricht}>Senden</button>
-      </div>
+      {!roomId && (
+        <>
+          <button onClick={createRoom}>Neuen Raum erstellen</button>
+          <h2>Lobby (Spieler ohne Raum):</h2>
+          <ul>
+            {lobbyPlayers.map(p => (
+              <li key={p}>
+                {p} {' '}
+                <button onClick={() => joinRoom(p)}>Raum betreten</button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
-      <div>
-        <h2>Chat</h2>
-        <ul>
-          {messages.map((msg, i) => (
-            <li key={i}>{msg}</li>
-          ))}
-        </ul>
-      </div>
+      {roomId && (
+        <>
+          <h2>Spielraum: {roomId}</h2>
+          <p>Spieler im Raum:</p>
+          <ul>
+            {roomPlayers.map(p => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+          <button onClick={leaveRoom}>Raum verlassen</button>
+          {roomPlayers.length === 2 && <p>Spiel kann gestartet werden!</p>}
+        </>
+      )}
     </div>
   );
 }
