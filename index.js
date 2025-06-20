@@ -1,91 +1,45 @@
-const express = require('express');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
+const express = require("express");
+const http = require("http");
+const path = require("path");
+const { Server } = require("socket.io");
+const cors = require("cors");
 
 const app = express();
-app.use(cors());
-app.use(express.static("public")); // <-- wichtig für dein index.html
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+  },
 });
 
-const PORT = process.env.PORT || 3002;
+// Mittelware
+app.use(cors());
 
-let lobby = new Set();
-let rooms = {};
+// Statischer Build (React-Frontend)
+app.use(express.static(path.join(__dirname, "frontend", "build")));
 
-io.on('connection', (socket) => {
-  console.log(`Neuer Spieler verbunden: ${socket.id}`);
-  lobby.add(socket.id);
-  io.emit('lobbyUpdate', Array.from(lobby));
+// Root Route
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+});
 
-  socket.on('createRoom', () => {
-    if (rooms[socket.id]) {
-      socket.emit('errorMessage', 'Du hast schon einen Raum.');
-      return;
-    }
-    rooms[socket.id] = [socket.id];
-    lobby.delete(socket.id);
-    socket.join(socket.id);
-    socket.emit('roomCreated', socket.id);
-    io.emit('lobbyUpdate', Array.from(lobby));
+// Socket.io Setup
+io.on("connection", (socket) => {
+  console.log("🟢 Neuer Client verbunden:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("🔴 Client getrennt:", socket.id);
   });
 
-  socket.on('joinRoom', (roomId) => {
-    if (!rooms[roomId]) {
-      socket.emit('errorMessage', 'Raum existiert nicht.');
-      return;
-    }
-    if (rooms[roomId].length >= 2) {
-      socket.emit('errorMessage', 'Raum ist voll.');
-      return;
-    }
-    rooms[roomId].push(socket.id);
-    lobby.delete(socket.id);
-    socket.join(roomId);
-    io.to(roomId).emit('roomJoined', rooms[roomId]);
-    io.emit('lobbyUpdate', Array.from(lobby));
-  });
-
-  socket.on('leaveRoom', (roomId) => {
-    if (rooms[roomId]) {
-      rooms[roomId] = rooms[roomId].filter(id => id !== socket.id);
-      if (rooms[roomId].length === 0) {
-        delete rooms[roomId];
-      } else {
-        io.to(roomId).emit('roomJoined', rooms[roomId]);
-      }
-      lobby.add(socket.id);
-      socket.leave(roomId);
-      io.emit('lobbyUpdate', Array.from(lobby));
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`Spieler getrennt: ${socket.id}`);
-    lobby.delete(socket.id);
-    for (const roomId in rooms) {
-      rooms[roomId] = rooms[roomId].filter(id => id !== socket.id);
-      if (rooms[roomId].length === 0) {
-        delete rooms[roomId];
-      } else {
-        io.to(roomId).emit('roomJoined', rooms[roomId]);
-      }
-    }
-    io.emit('lobbyUpdate', Array.from(lobby));
+  // Beispiel-Event
+  socket.on("chat-message", (msg) => {
+    console.log("📨 Chat:", msg);
+    io.emit("chat-message", msg);
   });
 });
 
+// Port
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`Server läuft auf Port ${PORT}`);
-});
-app.get('*', (req, res) => {
-  res.sendFile(__dirname + '/public/index.html');
+  console.log(`✅ Server läuft auf Port ${PORT}`);
 });
