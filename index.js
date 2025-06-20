@@ -13,13 +13,11 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-
-// === STATIC FRONTEND ===
-app.use(express.static(path.join(__dirname, "build")));
+app.use(express.static(path.join(__dirname, "frontend", "build")));
 
 // ========== SPIELLOGIK ==========
 const lobby = new Map(); // socket.id => name
-const rooms = new Map(); // roomId (host name) => [player names]
+const rooms = new Map(); // roomId => { players: [name1, name2], ready: Set<name> }
 
 io.on("connection", (socket) => {
   console.log("🟢 Client verbunden:", socket.id);
@@ -36,7 +34,7 @@ io.on("connection", (socket) => {
     if (rooms.has(playerName)) {
       return socket.emit("errorMessage", "Du hast bereits einen Raum.");
     }
-    rooms.set(playerName, [playerName]);
+    rooms.set(playerName, { players: [playerName], ready: new Set() });
     lobby.delete(socket.id);
     socket.join(playerName);
     socket.emit("roomCreated", { id: playerName, players: [playerName] });
@@ -46,25 +44,27 @@ io.on("connection", (socket) => {
   socket.on("joinRoom", (hostName) => {
     const room = rooms.get(hostName);
     if (!room) return socket.emit("errorMessage", "Raum existiert nicht.");
-    if (room.length >= 2) return socket.emit("errorMessage", "Raum ist voll.");
-    if (room.includes(playerName)) return;
+    if (room.players.length >= 2) return socket.emit("errorMessage", "Raum ist voll.");
+    if (room.players.includes(playerName)) return;
 
-    room.push(playerName);
+    room.players.push(playerName);
+    room.ready.delete(playerName);
     socket.join(hostName);
     lobby.delete(socket.id);
-    io.to(hostName).emit("roomJoined", { id: hostName, players: room });
+    io.to(hostName).emit("roomJoined", { id: hostName, players: room.players });
     broadcastLobby();
   });
 
   socket.on("leaveRoom", () => {
-    for (const [roomId, players] of rooms.entries()) {
-      if (players.includes(playerName)) {
-        const updated = players.filter((p) => p !== playerName);
-        if (updated.length === 0) {
+    for (const [roomId, room] of rooms.entries()) {
+      if (room.players.includes(playerName)) {
+        room.players = room.players.filter((p) => p !== playerName);
+        room.ready.delete(playerName);
+        if (room.players.length === 0) {
           rooms.delete(roomId);
         } else {
-          rooms.set(roomId, updated);
-          io.to(roomId).emit("roomJoined", { id: roomId, players: updated });
+          rooms.set(roomId, room);
+          io.to(roomId).emit("roomJoined", { id: roomId, players: room.players });
         }
         socket.leave(roomId);
         break;
@@ -75,38 +75,29 @@ io.on("connection", (socket) => {
     broadcastLobby();
   });
 
-  socket.on("disconnect", () => {
-    console.log(`🔴 ${playerName || socket.id} hat die Verbindung getrennt`);
-    lobby.delete(socket.id);
+  socket.on("readyUp", () => {
+    for (const [roomId, room] of rooms.entries()) {
+      if (room.players.includes(playerName)) {
+        room.ready.add(playerName);
+        io.to(roomId).emit("readyStatus", Array.from(room.ready));
 
-    for (const [roomId, players] of rooms.entries()) {
-      if (players.includes(playerName)) {
-        const updated = players.filter((p) => p !== playerName);
-        if (updated.length === 0) {
-          rooms.delete(roomId);
-        } else {
-          rooms.set(roomId, updated);
-          io.to(roomId).emit("roomJoined", { id: roomId, players: updated });
+        if (room.ready.size === 2) {
+          io.to(roomId).emit("gameStart", {
+            players: room.players,
+            message: "Spiel startet!",
+          });
         }
         break;
       }
     }
-
-    broadcastLobby();
   });
 
-  function broadcastLobby() {
-    const playerNames = Array.from(lobby.values());
-    io.emit("lobbyUpdate", playerNames);
-  }
-});
+  socket.on("disconnect", () => {
+    console.log(`🔴 ${playerName || socket.id} hat die Verbindung getrennt`);
+    lobby.delete(socket.id);
 
-// === REACT AUSLIEFERN ===
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`✅ Server läuft auf Port ${PORT}`);
-});
+    for (const [roomId, room] of rooms.entries()) {
+      if (room.players.includes(playerName)) {
+        room.players = room.players.filter((p) => p !== playerName);
+        room.ready.delete(playerName);
+        if

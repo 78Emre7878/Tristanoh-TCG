@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 
-const socket = io(); // Für Heroku automatisch korrekte URL
-const emreName = "Emre"; // ❗ Später durch Eingabe ersetzbar
+const socket = io();
 
 function App() {
+  const [name, setName] = useState('');
+  const [inputName, setInputName] = useState('');
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
   const [roomId, setRoomId] = useState(null);
   const [roomPlayers, setRoomPlayers] = useState([]);
   const [error, setError] = useState('');
+  const [ready, setReady] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
 
   useEffect(() => {
-    socket.on('connect', () => {
-      socket.emit('joinLobby', emreName);
-    });
-
     socket.on('lobbyUpdate', (players) => {
       setLobbyPlayers(players);
     });
@@ -34,42 +33,115 @@ function App() {
     socket.on('roomLeft', () => {
       setRoomId(null);
       setRoomPlayers([]);
+      setReady(false);
+      setGameStarted(false);
     });
 
     socket.on('errorMessage', (msg) => {
       setError(msg);
     });
 
+    socket.on('gameStarted', () => {
+      setGameStarted(true);
+    });
+
     return () => {
-      socket.off('connect');
       socket.off('lobbyUpdate');
       socket.off('roomCreated');
       socket.off('roomJoined');
       socket.off('roomLeft');
       socket.off('errorMessage');
+      socket.off('gameStarted');
     };
   }, []);
+
+  const joinLobby = () => {
+    if (inputName.trim()) {
+      setName(inputName.trim());
+      socket.emit('joinLobby', inputName.trim());
+    }
+  };
 
   const createRoom = () => {
     socket.emit('createRoom');
   };
 
-  const joinRoom = (hostName) => {
-    socket.emit('joinRoom', hostName);
+  const joinRoom = (id) => {
+    socket.emit('joinRoom', id);
   };
 
   const leaveRoom = () => {
-    socket.emit('leaveRoom');
+    if (roomId) {
+      socket.emit('leaveRoom');
+    }
   };
+
+  const markReady = () => {
+    socket.emit('playerReady', roomId);
+    setReady(true);
+  };
+
+  if (!name) {
+    return (
+      <div style={{ padding: 20 }}>
+        <h1>Tristano TCG Online</h1>
+        <p>Gib deinen Namen ein:</p>
+        <input value={inputName} onChange={e => setInputName(e.target.value)} />
+        <button onClick={joinLobby}>Zur Lobby</button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>🎴 Tristano TCG Online Prototyp</h1>
-      <p>Status: {roomId ? `🧩 Im Raum: ${roomId}` : '🏠 In der Lobby'}</p>
-      {error && <p style={{ color: 'red' }}>Fehler: {error}</p>}
+      <h1>Tristano TCG Online</h1>
+      <p>Status: {roomId ? `Im Raum: ${roomId}` : 'In der Lobby'}</p>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {!roomId && (
         <>
-          <p>Angemeldet als: <strong>{emreName}</strong></p>
-          <button onClick={createRoom}>➕ Neuen Raum erstellen</button>
-          <h2>⚔️ Verfügbare
+          <button onClick={createRoom}>Neuen Raum erstellen</button>
+          <h2>Lobby (Spieler ohne Raum):</h2>
+          <ul>
+            {lobbyPlayers.map(p => (
+              <li key={p}>
+                {p}{' '}
+                {p !== name && (
+                  <button onClick={() => joinRoom(p)}>Raum betreten</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {roomId && (
+        <>
+          <h2>Spielraum: {roomId}</h2>
+          <p>Spieler im Raum:</p>
+          <ul>
+            {roomPlayers.map(p => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+
+          {!gameStarted ? (
+            <>
+              <p>Bereit zum Start?</p>
+              {!ready ? (
+                <button onClick={markReady}>Ich bin bereit</button>
+              ) : (
+                <p>Warte auf anderen Spieler...</p>
+              )}
+              <button onClick={leaveRoom}>Raum verlassen</button>
+            </>
+          ) : (
+            <p>🃏 Das Spiel startet!</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default App;
