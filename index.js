@@ -13,7 +13,9 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(express.static(path.join(__dirname, "frontend", "build")));
+
+// === STATIC FRONTEND ===
+app.use(express.static(path.join(__dirname, "build")));
 
 // ========== SPIELLOGIK ==========
 const lobby = new Map(); // socket.id => name
@@ -23,14 +25,12 @@ io.on("connection", (socket) => {
   console.log("🟢 Client verbunden:", socket.id);
   let playerName = "";
 
-  // Spieler tritt Lobby bei
   socket.on("joinLobby", (name) => {
     playerName = name;
     lobby.set(socket.id, name);
     broadcastLobby();
   });
 
-  // Spieler erstellt neuen Raum
   socket.on("createRoom", () => {
     if (!playerName) return socket.emit("errorMessage", "Name fehlt.");
     if (rooms.has(playerName)) {
@@ -43,7 +43,6 @@ io.on("connection", (socket) => {
     broadcastLobby();
   });
 
-  // Spieler betritt vorhandenen Raum
   socket.on("joinRoom", (hostName) => {
     const room = rooms.get(hostName);
     if (!room) return socket.emit("errorMessage", "Raum existiert nicht.");
@@ -57,7 +56,6 @@ io.on("connection", (socket) => {
     broadcastLobby();
   });
 
-  // Spieler verlässt Raum
   socket.on("leaveRoom", () => {
     for (const [roomId, players] of rooms.entries()) {
       if (players.includes(playerName)) {
@@ -79,11 +77,8 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`🔴 ${playerName || socket.id} hat die Verbindung getrennt`);
-
-    // Aus Lobby entfernen
     lobby.delete(socket.id);
 
-    // Aus Raum entfernen, ggf. Raum löschen
     for (const [roomId, players] of rooms.entries()) {
       if (players.includes(playerName)) {
         const updated = players.filter((p) => p !== playerName);
@@ -106,9 +101,9 @@ io.on("connection", (socket) => {
   }
 });
 
-// React App ausliefern
+// === REACT AUSLIEFERN ===
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
