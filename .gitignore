@@ -1,0 +1,19 @@
+# Node modules (Backend & Frontend)
+node_modules/
+frontend/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Umgebungsvariablen
+.env
+frontend/.env
+
+# Sonstige Systemdateien
+.DS_Store
+frontend/.DS_Store
+
+# Build-Ordner im Frontend ignorieren (wird manuell nach backend/build kopiert)
+frontend/build/
