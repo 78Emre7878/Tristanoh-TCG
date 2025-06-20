@@ -13,7 +13,10 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(express.static(path.join(__dirname, "frontend", "build")));
+
+// 📁 Pfad zum React-Build
+const buildPath = path.join(__dirname, "..", "frontend", "build");
+app.use(express.static(buildPath));
 
 // ========== SPIELLOGIK ==========
 const lobby = new Map(); // socket.id => name
@@ -119,9 +122,9 @@ io.on("connection", (socket) => {
   }
 });
 
-// React App ausliefern (Catch-All)
+// ✨ React-App ausliefern (Fallback bei GET)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+  res.sendFile(path.join(buildPath, "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
