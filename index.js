@@ -15,7 +15,7 @@ const io = new Server(server, {
 // Mittelware
 app.use(cors());
 
-// Statischer Build (React-Frontend)
+// Serve static files from React
 app.use(express.static(path.join(__dirname, "frontend", "build")));
 
 // Socket.io Setup
@@ -32,7 +32,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Catch-all für React-Routing (muss ganz unten stehen!)
+// Catch-all for client-side routing
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
 });
