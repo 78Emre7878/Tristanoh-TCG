@@ -15,10 +15,10 @@ const io = new Server(server, {
 // Middleware
 app.use(cors());
 
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, "frontend", "build")));
+// Statische Dateien aus dem React-Build-Ordner bereitstellen
+app.use(express.static(path.join(__dirname, "build")));
 
-// Socket.io logic
+// Socket.io Setup
 io.on("connection", (socket) => {
   console.log("🟢 Neuer Client verbunden:", socket.id);
 
@@ -26,17 +26,19 @@ io.on("connection", (socket) => {
     console.log("🔴 Client getrennt:", socket.id);
   });
 
+  // Beispiel-Event für Chat
   socket.on("chat-message", (msg) => {
     console.log("📨 Chat:", msg);
     io.emit("chat-message", msg);
   });
 });
 
-// Catch-all route – must be LAST
+// Catch-all Route für React (muss ganz am Ende stehen!)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
+// Server starten
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`✅ Server läuft auf Port ${PORT}`);
