@@ -8,6 +8,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": "18.x",
+    "npm": "9.x"
+  },
   "description": "",
   "dependencies": {
     "cors": "^2.8.5",
@@ -16,3 +20,4 @@
     "socket.io-client": "^4.8.1"
   }
 }
+
