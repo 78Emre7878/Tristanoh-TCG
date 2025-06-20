@@ -14,11 +14,11 @@ const io = new Server(server, {
 
 app.use(cors());
 
-// ⚠️ Korrigierter Pfad zum React-Build
+// 🔧 Richtiger Pfad zum React-Build:
 app.use(express.static(path.join(__dirname, "..", "frontend", "build")));
 
-const lobby = new Map(); // socket.id => name
-const rooms = new Map(); // roomId => { players: [], ready: Set(), gameState: {...} }
+const lobby = new Map();
+const rooms = new Map();
 
 io.on("connection", (socket) => {
   console.log("🟢 Client verbunden:", socket.id);
@@ -120,7 +120,7 @@ io.on("connection", (socket) => {
   }
 });
 
-// Spielzustand und Decks erstellen
+// Spielzustand und Decks
 function createGameState(players) {
   const redDeck = generateTristanoDeck("rot");
   const blackDeck = generateTristanoDeck("schwarz");
@@ -143,13 +143,11 @@ function createGameState(players) {
 
 function generateTristanoDeck(farbe) {
   const werte = ["4", "5", "6", "7", "8", "9", "10", "Bube", "Dame", "König", "Ass"];
-  let deck = [];
-
+  const deck = [];
   werte.forEach((wert) => {
     deck.push({ farbe, wert });
     deck.push({ farbe, wert });
   });
-
   deck.push({ farbe, wert: "Joker" });
   return deck;
 }
@@ -163,7 +161,7 @@ function shuffle(array) {
   return array;
 }
 
-// ⚠️ Korrigierter Catch-All-Pfad für React
+// Catch-All für React Routing
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "frontend", "build", "index.html"));
 });
