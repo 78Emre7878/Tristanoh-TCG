@@ -1,13 +1,9 @@
-{
-<<<<<<< HEAD
-  "name": "backend",
-=======
+{{
   "name": "tristanoh-app",
->>>>>>> c1b36d0098444cf568b02fd13051de906a66aa5e
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",
@@ -16,11 +12,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
-<<<<<<< HEAD
-    "socket.io": "^4.8.1"
-=======
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
->>>>>>> c1b36d0098444cf568b02fd13051de906a66aa5e
   }
 }
