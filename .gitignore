@@ -14,6 +14,3 @@ frontend/.env
 # Sonstige Systemdateien
 .DS_Store
 frontend/.DS_Store
-
-# Build-Ordner im Frontend ignorieren (wird manuell nach backend/build kopiert)
-frontend/build/
