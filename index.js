@@ -12,13 +12,13 @@ const io = new Server(server, {
   },
 });
 
-// Mittelware
+// Middleware
 app.use(cors());
 
-// Serve static files from React
+// Serve static files from the React app
 app.use(express.static(path.join(__dirname, "frontend", "build")));
 
-// Socket.io Setup
+// Socket.io logic
 io.on("connection", (socket) => {
   console.log("🟢 Neuer Client verbunden:", socket.id);
 
@@ -32,12 +32,11 @@ io.on("connection", (socket) => {
   });
 });
 
-// Catch-all for client-side routing
+// Catch-all route – must be LAST
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
 });
 
-// Port
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`✅ Server läuft auf Port ${PORT}`);
