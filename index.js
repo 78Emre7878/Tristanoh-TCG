@@ -18,10 +18,11 @@ app.use(cors());
 // Statischer Build (React-Frontend)
 app.use(express.static(path.join(__dirname, "frontend", "build")));
 
-// Alle GET-Anfragen (außer statische Dateien) an React-Frontend weiterleiten
+// Catch-all für React-Routing (muss nach allen API-/Socket-Routen stehen!)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
 });
+
 
 
 // Socket.io Setup
