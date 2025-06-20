@@ -15,7 +15,7 @@ const io = new Server(server, {
 app.use(cors());
 
 // 🔧 Richtiger Pfad zum React-Build:
-app.use(express.static(path.join(__dirname, "..", "frontend", "build")));
+app.use(express.static(path.join(__dirname, "build")));
 
 const lobby = new Map();
 const rooms = new Map();
@@ -163,7 +163,7 @@ function shuffle(array) {
 
 // Catch-All für React Routing
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "frontend", "build", "index.html"));
+ res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
