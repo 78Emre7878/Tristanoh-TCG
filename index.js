@@ -18,10 +18,11 @@ app.use(cors());
 // Statischer Build (React-Frontend)
 app.use(express.static(path.join(__dirname, "frontend", "build")));
 
-// Root Route
-app.get("/", (req, res) => {
+// Alle GET-Anfragen (außer statische Dateien) an React-Frontend weiterleiten
+app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
 });
+
 
 // Socket.io Setup
 io.on("connection", (socket) => {
@@ -39,7 +40,7 @@ io.on("connection", (socket) => {
 });
 
 // Port
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`✅ Server läuft auf Port ${PORT}`);
 });
