@@ -100,4 +100,31 @@ io.on("connection", (socket) => {
       if (room.players.includes(playerName)) {
         room.players = room.players.filter((p) => p !== playerName);
         room.ready.delete(playerName);
-        if
+        if (room.players.length === 0) {
+          rooms.delete(roomId);
+        } else {
+          rooms.set(roomId, room);
+          io.to(roomId).emit("roomJoined", { id: roomId, players: room.players });
+        }
+        break;
+      }
+    }
+
+    broadcastLobby();
+  });
+
+  function broadcastLobby() {
+    const playerNames = Array.from(lobby.values());
+    io.emit("lobbyUpdate", playerNames);
+  }
+});
+
+// React App ausliefern (Catch-All)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`✅ Server läuft auf Port ${PORT}`);
+});
