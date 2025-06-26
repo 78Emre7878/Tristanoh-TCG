@@ -1,53 +1,58 @@
 import React, { useEffect, useState } from "react";
-import io from "socket.io-client";
-
-const socket = io();
+import { useSocket } from "./SocketContext";
+import Gameboard from "./Gameboard";
 
 function App() {
+  const socket = useSocket();
   const [name, setName] = useState("");
   const [inLobby, setInLobby] = useState(false);
-  const [players, setPlayers] = useState([]);
-  const [roomId, setRoomId] = useState(null);
-  const [readyPlayers, setReadyPlayers] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [roomId, setRoomId] = useState("");
+  const [playersInRoom, setPlayersInRoom] = useState([]);
+  const [ready, setReady] = useState(false);
   const [gameState, setGameState] = useState(null);
 
   useEffect(() => {
-    socket.on("lobbyUpdate", (lobbyPlayers) => {
-      setPlayers(lobbyPlayers);
+    socket.on("lobbyUpdate", ({ players, rooms }) => {
+      setRooms(rooms);
     });
 
     socket.on("roomCreated", ({ id, players }) => {
       setRoomId(id);
-      setPlayers(players);
+      setPlayersInRoom(players);
     });
 
     socket.on("roomJoined", ({ id, players }) => {
       setRoomId(id);
-      setPlayers(players);
-    });
-
-    socket.on("roomLeft", () => {
-      setRoomId(null);
-      setGameState(null);
-      setReadyPlayers([]);
-      setInLobby(true);
+      setPlayersInRoom(players);
     });
 
     socket.on("readyStatus", (readyList) => {
-      setReadyPlayers(readyList);
+      // optional UI Feedback
     });
 
     socket.on("gameStarted", (state) => {
+      state.roomId = roomId;
       setGameState(state);
     });
 
+    socket.on("gameStateUpdate", (updatedState) => {
+      updatedState.roomId = roomId;
+      setGameState(updatedState);
+    });
+
     return () => {
-      socket.off();
+      socket.off("lobbyUpdate");
+      socket.off("roomCreated");
+      socket.off("roomJoined");
+      socket.off("readyStatus");
+      socket.off("gameStarted");
+      socket.off("gameStateUpdate");
     };
-  }, []);
+  }, [socket, roomId]);
 
   const joinLobby = () => {
-    if (!name) return;
+    if (!name.trim()) return;
     socket.emit("joinLobby", name);
     setInLobby(true);
   };
@@ -56,69 +61,60 @@ function App() {
     socket.emit("createRoom");
   };
 
-  const joinRoom = (hostName) => {
-    socket.emit("joinRoom", hostName);
-  };
-
-  const leaveRoom = () => {
-    socket.emit("leaveRoom");
+  const joinRoom = (id) => {
+    socket.emit("joinRoom", id);
   };
 
   const toggleReady = () => {
     socket.emit("playerReady", roomId);
+    setReady(true);
   };
+
+  if (!inLobby) {
+    return (
+      <div style={{ padding: 20 }}>
+        <h1>Tristano TCG</h1>
+        <input
+          placeholder="Dein Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button onClick={joinLobby}>Zur Lobby</button>
+      </div>
+    );
+  }
+
+  if (gameState) {
+    return (
+      <Gameboard
+        playerName={name}
+        gameState={gameState}
+        setGameState={setGameState}
+      />
+    );
+  }
 
   return (
     <div style={{ padding: 20 }}>
-      {!inLobby ? (
-        <div>
-          <h1>Tristano TCG</h1>
-          <input
-            placeholder="Dein Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <button onClick={joinLobby}>Lobby betreten</button>
-        </div>
-      ) : roomId ? (
-        <div>
-          <h2>Raum: {roomId}</h2>
-          <p>Spieler im Raum: {players.join(", ")}</p>
-          <p>Bereit: {readyPlayers.join(", ")}</p>
-          {gameState ? (
-            <div>
-              <h3>Spiel gestartet</h3>
-              <p>Du bist: {name}</p>
-              <p>Zug: {gameState.turn}</p>
-              <p>Phase: {gameState.phase}</p>
-              <h4>Handkarten:</h4>
-              <ul>
-                {(gameState.hands[name] || []).map((card, i) => (
-                  <li key={i}>{card.wert} ({card.farbe})</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <>
-              <button onClick={toggleReady}>Bereit</button>
-              <button onClick={leaveRoom}>Raum verlassen</button>
-            </>
-          )}
-        </div>
+      <h1>Lobby</h1>
+      <h2>Willkommen, {name}</h2>
+      {roomId ? (
+        <>
+          <p>Im Raum: {roomId}</p>
+          <p>Spieler im Raum: {playersInRoom.join(", ")}</p>
+          {!ready && <button onClick={toggleReady}>Bereit</button>}
+        </>
       ) : (
-        <div>
-          <h2>Lobby</h2>
-          <p>Spieler online:</p>
-          <ul>
-            {players.map((p) => (
-              <li key={p}>
-                {p}
-                {p !== name && <button onClick={() => joinRoom(p)}>Beitreten</button>}
-              </li>
-            ))}
-          </ul>
-          <button onClick={createRoom}>Neuen Raum erstellen</button>
-        </div>
+        <>
+          <button onClick={createRoom}>Raum erstellen</button>
+          <h3>Verfügbare Räume:</h3>
+          {rooms.map((room) => (
+            <div key={room.id}>
+              <strong>{room.id}</strong> – Spieler: {room.players.length}
+              <button onClick={() => joinRoom(room.id)}>Beitreten</button>
+            </div>
+          ))}
+        </>
       )}
     </div>
   );

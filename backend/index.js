@@ -1,27 +1,32 @@
+
 const express = require("express");
 const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const {
+  generateDeck,
+  shuffle,
+  createGameState,
+  playCardToField,
+  drawCard,
+  moveToGraveyard,
+  regenerateShield,
+  attackMonsterZone
+} = require("./gameLogic");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(cors());
-
-// ⚠️ Statische Dateien der React-App aus frontend/build bereitstellen
 app.use(express.static(path.join(__dirname, "../frontend/build")));
 
-const lobby = new Map(); // socket.id => name
-const rooms = new Map(); // roomId => { players: [], ready: Set(), gameState: {...} }
+const lobby = new Map();
+const rooms = new Map();
 
 io.on("connection", (socket) => {
-  console.log("🟢 Client verbunden:", socket.id);
+  console.log("🟢 Verbunden:", socket.id);
   let playerName = "";
 
   socket.on("joinLobby", (name) => {
@@ -31,7 +36,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("createRoom", () => {
-    if (!playerName) return socket.emit("errorMessage", "Name fehlt.");
+    if (!playerName) return socket.emit("errorMessage", "Name fehlt");
     if (rooms.has(playerName)) {
       return socket.emit("errorMessage", "Du hast bereits einen Raum.");
     }
@@ -88,11 +93,112 @@ io.on("connection", (socket) => {
     io.to(roomId).emit("readyStatus", Array.from(room.ready));
 
     if (room.ready.size === 2 && !room.gameState) {
-      const gameState = createGameState(room.players);
+      const gameState = createGameState(room.players, roomId);
       room.gameState = gameState;
       io.to(roomId).emit("gameStarted", gameState);
     }
   });
+
+  socket.on("drawCard", ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.gameState) return;
+    const card = drawCard(room.gameState, playerName);
+    if (card) {
+      io.to(roomId).emit("gameStateUpdate", room.gameState);
+    }
+  });
+
+  socket.on("playCardToField", ({ playerName, handIndex, fieldIndex, roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.gameState) return;
+    const success = playCardToField(room.gameState, playerName, handIndex, fieldIndex);
+    if (success) {
+      io.to(roomId).emit("gameStateUpdate", room.gameState);
+    } else {
+      socket.emit("errorMessage", "Karte konnte nicht aufs Feld gelegt werden.");
+    }
+  });
+
+  socket.on("destroyCard", ({ roomId, fieldIndex }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.gameState) return;
+    const success = moveToGraveyard(room.gameState, playerName, fieldIndex);
+    if (success) {
+      io.to(roomId).emit("gameStateUpdate", room.gameState);
+    }
+  });
+
+  socket.on("regenerateShield", ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.gameState) return;
+    const success = regenerateShield(room.gameState, playerName);
+    if (success) {
+      io.to(roomId).emit("gameStateUpdate", room.gameState);
+    }
+  });
+
+  socket.on("endPhase", ({ roomId, playerName }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.gameState) return;
+
+    const currentPlayer = room.gameState.turn;
+    const nextPlayer = room.gameState.players.find((p) => p !== currentPlayer);
+
+    const phases = ["draw", "main", "battle", "end"];
+    const currentPhaseIndex = phases.indexOf(room.gameState.phase);
+
+    if (currentPhaseIndex === -1) return;
+
+    if (room.gameState.phase === "end") {
+      room.gameState.turn = nextPlayer;
+      room.gameState.phase = "draw";
+    } else {
+      room.gameState.phase = phases[currentPhaseIndex + 1];
+    }
+
+    io.to(roomId).emit("gameStateUpdate", room.gameState);
+  });
+
+  socket.on("attackShield", ({ attacker, target }) => {
+    const room = Array.from(rooms.values()).find((r) => r.players.includes(attacker));
+    if (!room || !room.gameState) return;
+    const gameState = room.gameState;
+    if (gameState.turn !== attacker || gameState.phase !== "battle") return;
+
+    const opponent = room.players.find((p) => p !== attacker);
+    const opponentField = gameState.fields[opponent];
+    if (!opponentField.shields[target]) return;
+
+    opponentField.shields[target] = false;
+    io.to(room.roomId).emit("gameStateUpdate", gameState);
+  });
+
+socket.on("attackMonster", ({ attacker, defender, attackerIndex, defenderIndex }) => {
+  const room = Array.from(rooms.values()).find((r) => r.players.includes(attacker));
+  if (!room || !room.gameState) return;
+
+  const gameState = room.gameState;
+
+  if (gameState.turn !== attacker || gameState.phase !== "battle") return;
+
+  const attackerField = gameState.fields[attacker];
+  const defenderField = gameState.fields[defender];
+
+  const attackerCard = attackerField.monsterZones[attackerIndex];
+  const defenderCard = defenderField.monsterZones[defenderIndex];
+
+  if (!attackerCard || !defenderCard) return;
+
+  // 🔥 Standard-Regel: beide zerstört
+  attackerField.monsterZones[attackerIndex] = null;
+  defenderField.monsterZones[defenderIndex] = null;
+
+  attackerField.graveyard.push(attackerCard);
+  defenderField.graveyard.push(defenderCard);
+
+  io.to(room.players[0]).emit("gameUpdated", gameState);
+  io.to(room.players[1]).emit("gameUpdated", gameState);
+});
 
   socket.on("disconnect", () => {
     console.log(`🔴 ${playerName || socket.id} hat die Verbindung getrennt`);
@@ -116,59 +222,19 @@ io.on("connection", (socket) => {
 
   function broadcastLobby() {
     const playerNames = Array.from(lobby.values());
-    io.emit("lobbyUpdate", playerNames);
+    const roomList = Array.from(rooms.entries()).map(([id, room]) => ({
+      id,
+      players: room.players,
+    }));
+    io.emit("lobbyUpdate", { players: playerNames, rooms: roomList });
   }
 });
 
-// Spielzustand und Decks erstellen
-function createGameState(players) {
-  const redDeck = generateTristanoDeck("rot");
-  const blackDeck = generateTristanoDeck("schwarz");
-
-  return {
-    players,
-    decks: {
-      [players[0]]: shuffle([...redDeck]),
-      [players[1]]: shuffle([...blackDeck]),
-    },
-    hands: {
-      [players[0]]: [],
-      [players[1]]: [],
-    },
-    field: [],
-    turn: players[0],
-    phase: "start",
-  };
-}
-
-function generateTristanoDeck(farbe) {
-  const werte = ["4", "5", "6", "7", "8", "9", "10", "Bube", "Dame", "König", "Ass"];
-  let deck = [];
-
-  werte.forEach((wert) => {
-    deck.push({ farbe, wert });
-    deck.push({ farbe, wert });
-  });
-
-  deck.push({ farbe, wert: "Joker" });
-  return deck;
-}
-
-function shuffle(array) {
-  let currentIndex = array.length;
-  while (currentIndex !== 0) {
-    const randomIndex = Math.floor(Math.random() * currentIndex--);
-    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
-  }
-  return array;
-}
-
-// 🔁 Fallback: Bei allen unbekannten Routen die React-App liefern
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/build", "index.html"));
+  res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`✅ Server läuft auf Port ${PORT}`);
 });
