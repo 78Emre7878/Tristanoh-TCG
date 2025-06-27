@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useEffect, useState } from "react";
 import { useSocket } from "./SocketContext";
 import Gameboard from "./Gameboard";
@@ -13,6 +14,8 @@ function App() {
   const [gameState, setGameState] = useState(null);
 
   useEffect(() => {
+    if (!socket) return;
+
     socket.on("lobbyUpdate", ({ players, rooms }) => {
       setRooms(rooms);
     });
@@ -28,7 +31,7 @@ function App() {
     });
 
     socket.on("readyStatus", (readyList) => {
-      // optional UI Feedback
+      // Optionale Verarbeitung
     });
 
     socket.on("gameStarted", (state) => {
@@ -52,8 +55,12 @@ function App() {
   }, [socket, roomId]);
 
   const joinLobby = () => {
-    if (!name.trim()) return;
-    socket.emit("joinLobby", name);
+    if (!name.trim()) {
+      alert("Bitte Name eingeben.");
+      return;
+    }
+
+    socket.emit("joinLobby", { playerName: name });
     setInLobby(true);
   };
 
@@ -101,7 +108,22 @@ function App() {
       {roomId ? (
         <>
           <p>Im Raum: {roomId}</p>
-          <p>Spieler im Raum: {playersInRoom.join(", ")}</p>
+          <p>
+            Spieler im Raum:{" "}
+            {Array.isArray(playersInRoom)
+              ? playersInRoom
+                  .map((p, i) => {
+                    if (typeof p === "object" && p !== null && "playerName" in p) {
+                      return p.playerName;
+                    } else if (typeof p === "string") {
+                      return p;
+                    } else {
+                      return `Unbekannt${i}`;
+                    }
+                  })
+                  .join(", ")
+              : "Unbekannt"}
+          </p>
           {!ready && <button onClick={toggleReady}>Bereit</button>}
         </>
       ) : (
@@ -110,7 +132,20 @@ function App() {
           <h3>Verfügbare Räume:</h3>
           {rooms.map((room) => (
             <div key={room.id}>
-              <strong>{room.id}</strong> – Spieler: {room.players.length}
+              <strong>{room.id}</strong> – Spieler:{" "}
+              {Array.isArray(room.players)
+                ? room.players
+                    .map((p, i) => {
+                      if (typeof p === "object" && p !== null && "playerName" in p) {
+                        return p.playerName;
+                      } else if (typeof p === "string") {
+                        return p;
+                      } else {
+                        return `?${i}`;
+                      }
+                    })
+                    .join(", ")
+                : "Keine Spieler"}
               <button onClick={() => joinRoom(room.id)}>Beitreten</button>
             </div>
           ))}

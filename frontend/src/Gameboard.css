@@ -1,61 +1,110 @@
-.gameboard {
-  padding: 20px;
+/* src/Gameboard.css */
+
+.tristano-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   font-family: sans-serif;
-  background-color: #f5f5f5;
+  background: url("./assets/img/board/background.jpg");
+  background-size: cover;
+  background-position: center;
+  min-height: 100vh;
+  padding: 20px;
+  color: white;
 }
 
 .phase-bar {
-  background-color: #dfe6e9;
-  padding: 10px;
-  margin-bottom: 20px;
-  border-radius: 8px;
   display: flex;
-  gap: 15px;
-  align-items: center;
-}
-
-.hand-section, .field-section, .shield-section, .opponent-section, .meta-section {
-  margin-bottom: 25px;
-}
-
-.hand-cards, .field-zones, .shield-zones, .opponent-field-zones {
-  display: flex;
+  justify-content: center;
   gap: 10px;
+  margin-bottom: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+
+.player-opponent,
+.player-self {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 1000px;
+  margin-bottom: 30px;
+}
+
+.deck,
+.graveyard {
+  margin: 5px;
+  padding: 5px;
+  min-width: 100px;
+  min-height: 50px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  text-align: center;
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+}
+
+.shields,
+.field,
+.hand {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
   flex-wrap: wrap;
 }
 
-.card {
-  height: 100px;
-  width: auto;
-  border-radius: 6px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.3);
-  transition: transform 0.2s;
-}
-
-.card:hover {
-  transform: scale(1.05);
-}
-
-.zone, .shield {
+.shield,
+.monsterzone {
   width: 100px;
-  height: 140px;
-  border: 2px dashed #b2bec3;
+  height: 130px;
+  background: rgba(0, 0, 0, 0.4);
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: white;
-}
-
-.empty-zone {
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  text-align: center;
+  color: white;
   font-size: 14px;
-  color: #636e72;
 }
 
-.meta-section button {
-  margin-top: 10px;
+.card {
+  width: 80px;
+  height: auto;
+  transition: transform 0.2s ease;
+  border-radius: 4px;
+  box-shadow: 0 0 5px #000;
+  cursor: pointer;
 }
 
-h2, h3 {
-  margin-bottom: 8px;
+.card:hover {
+  transform: scale(1.08);
+}
+
+.empty {
+  font-size: 12px;
+  color: lightgray;
+  text-align: center;
+}
+
+button {
+  margin: 5px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  background-color: darkred;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background-color: crimson;
+}
+
+button:disabled {
+  background-color: gray;
+  cursor: not-allowed;
 }

@@ -2,13 +2,18 @@
 import React, { createContext, useContext } from "react";
 import { io } from "socket.io-client";
 
-// Verbindung zum Backend herstellen
-export const socket = io("http://localhost:3001");
+// URL vom Backend aus .env-Datei holen oder fallback auf localhost
+const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:3001";
 
-// Context erstellen
+// Verbindung zum Backend herstellen
+const socket = io(backendUrl, {
+  transports: ["websocket"],
+});
+
+// React Context für Socket
 export const SocketContext = createContext();
 
-// Context-Provider-Komponente
+// Provider-Komponente
 export const SocketProvider = ({ children }) => {
   return (
     <SocketContext.Provider value={socket}>
@@ -17,5 +22,5 @@ export const SocketProvider = ({ children }) => {
   );
 };
 
-// Custom Hook für einfachen Zugriff
+// Custom Hook zur Nutzung des Sockets
 export const useSocket = () => useContext(SocketContext);
