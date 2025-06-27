@@ -31,7 +31,7 @@ function App() {
     });
 
     socket.on("readyStatus", (readyList) => {
-      // Optionale Verarbeitung
+      // Optional: anzeigen, wer bereit ist
     });
 
     socket.on("gameStarted", (state) => {
@@ -56,11 +56,11 @@ function App() {
 
   const joinLobby = () => {
     if (!name.trim()) {
-      alert("Bitte Name eingeben.");
+      alert("Bitte gib einen Namen ein.");
       return;
     }
 
-    socket.emit("joinLobby", { playerName: name });
+    socket.emit("selectGame", { playerName: name, game: "Tristano" });
     setInLobby(true);
   };
 
@@ -75,6 +75,10 @@ function App() {
   const toggleReady = () => {
     socket.emit("playerReady", roomId);
     setReady(true);
+  };
+
+  const startAIMatch = () => {
+    socket.emit("startAIMatch");
   };
 
   if (!inLobby) {
@@ -105,6 +109,7 @@ function App() {
     <div style={{ padding: 20 }}>
       <h1>Lobby</h1>
       <h2>Willkommen, {name}</h2>
+
       {roomId ? (
         <>
           <p>Im Raum: {roomId}</p>
@@ -129,6 +134,7 @@ function App() {
       ) : (
         <>
           <button onClick={createRoom}>Raum erstellen</button>
+          <button onClick={startAIMatch}>Gegen KI spielen</button>
           <h3>Verfügbare Räume:</h3>
           {rooms.map((room) => (
             <div key={room.id}>

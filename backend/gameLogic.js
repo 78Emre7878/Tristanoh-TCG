@@ -1,4 +1,4 @@
-// gameLogic.js
+// backend/gameLogic.js
 
 const cardValues = ["4", "5", "6", "7", "8", "9", "10", "Bube", "Dame", "König", "Ass"];
 const symbols = {
@@ -6,7 +6,7 @@ const symbols = {
   schwarz: ["spades", "clubs"],
 };
 
-// Kartenpfad
+// Bildpfade
 function getCardImagePath(wert, symbol) {
   const valueMap = {
     Bube: "jack",
@@ -18,7 +18,7 @@ function getCardImagePath(wert, symbol) {
   return `/Cards-Ordner/img/cards/${valueString.toLowerCase()}_of_${symbol.toLowerCase()}.png`;
 }
 
-// Deck erzeugen
+// Deck-Erstellung
 function generateDeck(color) {
   const deck = [];
 
@@ -33,6 +33,7 @@ function generateDeck(color) {
     }
   }
 
+  // Joker hinzufügen
   deck.push({
     farbe: color,
     wert: "Joker",
@@ -45,7 +46,7 @@ function generateDeck(color) {
   return deck;
 }
 
-// Shuffle
+// Deck mischen
 function shuffle(deck) {
   const array = [...deck];
   for (let i = array.length - 1; i > 0; i--) {
@@ -55,24 +56,13 @@ function shuffle(deck) {
   return array;
 }
 
-// Spielerbereiche initialisieren
-function initializePlayerZones(deck) {
-  return {
-    deck,
-    hand: deck.splice(0, 3),
-    field: [null, null, null],
-    shields: [2, 3],
-    graveyard: [],
-  };
-}
-
 // GameState erzeugen
 function createGameState(players, roomId) {
   const redDeck = shuffle(generateDeck("rot"));
   const blackDeck = shuffle(generateDeck("schwarz"));
 
   return {
-    roomId, // ✅ Hier hinzugefügt
+    roomId,
     players,
     turn: players[0],
     phase: "draw",
@@ -104,113 +94,86 @@ function createGameState(players, roomId) {
 
 // Karte ziehen
 function drawCard(gameState, playerName) {
-  if (!gameState || !gameState.zones || !gameState.zones[playerName]) {
-    console.log('❌ drawCard: ungültiger Spieler oder Zustand', { playerName, gameState });
-    return;
-  }
-
-  const player = gameState.zones[playerName];
-  if (player.deck.length === 0) return;
-
-  const card = player.deck.pop();
-  player.hand.push(card);
+  const deck = gameState.decks[playerName];
+  const hand = gameState.hands[playerName];
+  if (!deck || !hand || deck.length === 0) return;
+  const card = deck.pop();
+  hand.push(card);
 }
 
 // Karte aufs Feld legen
 function playCardToField(gameState, playerName, handIndex, fieldIndex) {
-  const player = gameState.zones[playerName];
-  if (!player) return false;
+  const hand = gameState.hands[playerName];
+  const field = gameState.fields[playerName].monsterZones;
+
   if (
-    handIndex < 0 || handIndex >= player.hand.length ||
-    fieldIndex < 0 || fieldIndex >= player.field.length ||
-    player.field[fieldIndex] !== null
+    handIndex < 0 || handIndex >= hand.length ||
+    fieldIndex < 0 || fieldIndex >= field.length ||
+    field[fieldIndex] !== null
   ) return false;
 
-  const card = player.hand.splice(handIndex, 1)[0];
-  player.field[fieldIndex] = card;
+  const card = hand.splice(handIndex, 1)[0];
+  field[fieldIndex] = card;
   return true;
 }
 
 // Karte in den Friedhof verschieben
 function moveToGraveyard(gameState, playerName, fieldIndex) {
-  const player = gameState.zones[playerName];
-  if (!player || fieldIndex < 0 || fieldIndex >= player.field.length) return false;
-  const card = player.field[fieldIndex];
+  const field = gameState.fields[playerName].monsterZones;
+  const graveyard = gameState.fields[playerName].graveyard;
+
+  if (fieldIndex < 0 || fieldIndex >= field.length) return false;
+  const card = field[fieldIndex];
   if (!card) return false;
 
-  player.field[fieldIndex] = null;
-  player.graveyard.push(card);
+  field[fieldIndex] = null;
+  graveyard.push(card);
   return true;
 }
 
 // Schild regenerieren
 function regenerateShield(gameState, playerName) {
-  const player = gameState.zones[playerName];
-  if (!player) return false;
+  const hand = gameState.hands[playerName];
+  const shields = gameState.fields[playerName].shields;
+  const graveyard = gameState.fields[playerName].graveyard;
 
-  const aceIndex = player.hand.findIndex((c) => c.wert === "Ass");
+  const aceIndex = hand.findIndex((c) => c.wert === "Ass");
   if (aceIndex === -1) return false;
 
-  const shieldIndex = player.shields.findIndex((val) => val < 3);
-  if (shieldIndex === -1) return false;
+  const destroyedIndex = shields.findIndex((val) => val === null);
+  if (destroyedIndex === -1) return false;
 
-  const ace = player.hand.splice(aceIndex, 1)[0];
-  player.graveyard.push(ace);
-  player.shields[shieldIndex] = Math.min(3, player.shields[shieldIndex] + 1);
-  return true;
-}
-// Monster angreifen
-function attackMonster(gameState, attackerPlayer, attackerIndex, defenderPlayer, defenderIndex) {
-  // Beispielhafte Logik
-  const attackerField = gameState.fields[attackerPlayer].monsterZones;
-  const defenderField = gameState.fields[defenderPlayer].monsterZones;
-
-  const attackerCard = attackerField[attackerIndex];
-  const defenderCard = defenderField[defenderIndex];
-
-  if (!attackerCard || !defenderCard) return false;
-
-  // Beispielregel: Beide Karten zerstören sich
-  attackerField[attackerIndex] = null;
-  defenderField[defenderIndex] = null;
-
-  gameState.fields[attackerPlayer].graveyard.push(attackerCard);
-  gameState.fields[defenderPlayer].graveyard.push(defenderCard);
-
+  const ace = hand.splice(aceIndex, 1)[0];
+  graveyard.push(ace);
+  shields[destroyedIndex] = true;
   return true;
 }
 
-// Monsterzone angreifen
+// Monsterzone angreifen (nach Kartenwert)
 function attackMonsterZone(gameState, attacker, attackerIndex, defender, defenderIndex) {
   const attackerZones = gameState.fields[attacker].monsterZones;
   const defenderZones = gameState.fields[defender].monsterZones;
+  const aCard = attackerZones[attackerIndex];
+  const dCard = defenderZones[defenderIndex];
 
-  const attackerCard = attackerZones[attackerIndex];
-  const defenderCard = defenderZones[defenderIndex];
+  if (!aCard || !dCard) return false;
 
-  if (!attackerCard || !defenderCard) return false;
+  const order = ["4", "5", "6", "7", "8", "9", "10", "Bube", "Dame", "König", "Ass"];
+  const aValue = order.indexOf(aCard.wert);
+  const dValue = order.indexOf(dCard.wert);
 
-  // Beispiel-Regel: Die Karte mit dem höheren Wert gewinnt
-  const getWert = (card) => {
-    const order = ["4", "5", "6", "7", "8", "9", "10", "Bube", "Dame", "König", "Ass"];
-    return order.indexOf(card.wert);
-  };
-
-  const attackerValue = getWert(attackerCard);
-  const defenderValue = getWert(defenderCard);
-
-  if (attackerValue > defenderValue) {
+  if (aValue > dValue) {
     defenderZones[defenderIndex] = null;
-    gameState.fields[defender].graveyard.push(defenderCard);
-  } else if (attackerValue < defenderValue) {
+    gameState.fields[defender].graveyard.push(dCard);
+  } else if (aValue < dValue) {
     attackerZones[attackerIndex] = null;
-    gameState.fields[attacker].graveyard.push(attackerCard);
+    gameState.fields[attacker].graveyard.push(aCard);
   } else {
     // Gleichstand: beide zerstört
     attackerZones[attackerIndex] = null;
     defenderZones[defenderIndex] = null;
-    gameState.fields[attacker].graveyard.push(attackerCard);
-    gameState.fields[defender].graveyard.push(defenderCard);
+    gameState.fields[attacker].graveyard.push(aCard);
+    gameState.fields[defender].graveyard.push(dCard);
   }
 
   return true;
@@ -224,6 +187,5 @@ module.exports = {
   playCardToField,
   moveToGraveyard,
   regenerateShield,
-  attackMonster,
-  attackMonsterZone
+  attackMonsterZone,
 };

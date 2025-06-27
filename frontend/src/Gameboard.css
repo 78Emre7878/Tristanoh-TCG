@@ -5,106 +5,143 @@
   flex-direction: column;
   align-items: center;
   font-family: sans-serif;
-  background: url("./assets/img/board/background.jpg");
-  background-size: cover;
-  background-position: center;
-  min-height: 100vh;
-  padding: 20px;
+  background-color: #1a1a1a;
   color: white;
+  min-height: 100vh;
+  padding: 10px;
 }
 
 .phase-bar {
   display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 10px 20px;
-  border-radius: 8px;
-}
-
-.player-opponent,
-.player-self {
-  display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  width: 80%;
+  margin-bottom: 10px;
   align-items: center;
-  width: 100%;
-  max-width: 1000px;
-  margin-bottom: 30px;
 }
 
-.deck,
-.graveyard {
-  margin: 5px;
-  padding: 5px;
-  min-width: 100px;
-  min-height: 50px;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 6px;
-  text-align: center;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
+.phase-bar button {
+  margin: 0 4px;
+  padding: 5px 10px;
+  font-weight: bold;
 }
 
-.shields,
-.field,
-.hand {
+.timer {
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.board-container {
   display: flex;
   justify-content: center;
-  gap: 10px;
-  margin: 10px 0;
+  align-items: flex-start;
+  gap: 40px;
+  width: 100%;
   flex-wrap: wrap;
 }
 
-.shield,
-.monsterzone {
-  width: 100px;
-  height: 130px;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 6px;
+.player-area {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  gap: 6px;
+}
+
+.hand, .field, .shields {
+  display: flex;
+  gap: 6px;
   justify-content: center;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  text-align: center;
-  color: white;
-  font-size: 14px;
+  flex-wrap: wrap;
 }
 
 .card {
   width: 80px;
   height: auto;
-  transition: transform 0.2s ease;
-  border-radius: 4px;
-  box-shadow: 0 0 5px #000;
+  border-radius: 8px;
+  box-shadow: 0 0 8px #000;
   cursor: pointer;
+  transition: transform 0.2s ease;
 }
 
 .card:hover {
-  transform: scale(1.08);
+  transform: scale(1.05);
 }
 
-.empty {
-  font-size: 12px;
-  color: lightgray;
-  text-align: center;
+.monsterzone {
+  width: 80px;
+  height: 120px;
+  background-color: #2a2a2a;
+  border: 1px dashed #555;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
 }
 
-button {
-  margin: 5px;
-  padding: 6px 12px;
+.shield {
+  width: 80px;
+  height: 120px;
+  position: relative;
+}
+
+.side-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.graveyard {
+  background-color: #444;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.chat-area {
+  display: flex;
+  flex-direction: column;
+  width: 250px;
+  background-color: #222;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 10px;
+  gap: 10px;
+}
+
+.chat-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-messages {
+  height: 200px;
+  overflow-y: auto;
+  background-color: #111;
+  border: 1px solid #333;
+  padding: 5px;
+  font-size: 0.9rem;
+  border-radius: 6px;
+}
+
+.chat-messages div {
+  margin-bottom: 4px;
+}
+
+.chat-box input {
+  padding: 5px;
   border: none;
-  border-radius: 5px;
-  background-color: darkred;
-  color: white;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  border-radius: 4px;
+  margin-top: 5px;
 }
 
-button:hover:not(:disabled) {
-  background-color: crimson;
-}
-
-button:disabled {
-  background-color: gray;
-  cursor: not-allowed;
+.chat-box button {
+  margin-top: 5px;
+  padding: 5px;
+  font-weight: bold;
 }
