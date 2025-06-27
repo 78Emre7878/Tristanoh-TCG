@@ -1,4 +1,3 @@
-
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -12,7 +11,7 @@ const {
   drawCard,
   moveToGraveyard,
   regenerateShield,
-  attackMonsterZone
+  attackMonsterZone,
 } = require("./gameLogic");
 
 const app = express();
@@ -29,9 +28,14 @@ io.on("connection", (socket) => {
   console.log("🟢 Verbunden:", socket.id);
   let playerName = "";
 
-  socket.on("joinLobby", (name) => {
+  socket.on("joinLobby", ({ playerName: name }) => {
+    if (!name || name.length < 3) {
+      return socket.emit("errorMessage", "Name ist zu kurz oder fehlt.");
+    }
+
     playerName = name;
-    lobby.set(socket.id, name);
+    lobby.set(socket.id, playerName);
+    socket.emit("lobbyJoined", playerName);
     broadcastLobby();
   });
 
@@ -41,10 +45,24 @@ io.on("connection", (socket) => {
       return socket.emit("errorMessage", "Du hast bereits einen Raum.");
     }
 
+    const gameState = {
+      zones: {
+        [playerName]: {
+          hand: [],
+          field: [],
+          shields: [],
+          deck: [],
+          graveyard: [],
+        },
+      },
+      turn: playerName,
+      phase: "draw",
+    };
+
     rooms.set(playerName, {
       players: [playerName],
       ready: new Set(),
-      gameState: null,
+      gameState,
     });
 
     lobby.delete(socket.id);
@@ -92,9 +110,10 @@ io.on("connection", (socket) => {
     room.ready.add(playerName);
     io.to(roomId).emit("readyStatus", Array.from(room.ready));
 
-    if (room.ready.size === 2 && !room.gameState) {
+    if (room.ready.size === 2 && !room.gameStateStarted) {
       const gameState = createGameState(room.players, roomId);
       room.gameState = gameState;
+      room.gameStateStarted = true;
       io.to(roomId).emit("gameStarted", gameState);
     }
   });
@@ -137,12 +156,12 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("endPhase", ({ roomId, playerName }) => {
+  socket.on("endPhase", ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || !room.gameState) return;
 
     const currentPlayer = room.gameState.turn;
-    const nextPlayer = room.gameState.players.find((p) => p !== currentPlayer);
+    const nextPlayer = room.players.find((p) => p !== currentPlayer);
 
     const phases = ["draw", "main", "battle", "end"];
     const currentPhaseIndex = phases.indexOf(room.gameState.phase);
@@ -159,46 +178,31 @@ io.on("connection", (socket) => {
     io.to(roomId).emit("gameStateUpdate", room.gameState);
   });
 
-  socket.on("attackShield", ({ attacker, target }) => {
+  socket.on("attackMonster", ({ attacker, defender, attackerIndex, defenderIndex }) => {
     const room = Array.from(rooms.values()).find((r) => r.players.includes(attacker));
     if (!room || !room.gameState) return;
+
     const gameState = room.gameState;
     if (gameState.turn !== attacker || gameState.phase !== "battle") return;
 
-    const opponent = room.players.find((p) => p !== attacker);
-    const opponentField = gameState.fields[opponent];
-    if (!opponentField.shields[target]) return;
+    const attackerField = gameState.fields[attacker];
+    const defenderField = gameState.fields[defender];
 
-    opponentField.shields[target] = false;
-    io.to(room.roomId).emit("gameStateUpdate", gameState);
+    const attackerCard = attackerField.monsterZones[attackerIndex];
+    const defenderCard = defenderField.monsterZones[defenderIndex];
+
+    if (!attackerCard || !defenderCard) return;
+
+    attackerField.monsterZones[attackerIndex] = null;
+    defenderField.monsterZones[defenderIndex] = null;
+
+    attackerField.graveyard.push(attackerCard);
+    defenderField.graveyard.push(defenderCard);
+
+    room.players.forEach((p) => {
+      io.to(p).emit("gameUpdated", gameState);
+    });
   });
-
-socket.on("attackMonster", ({ attacker, defender, attackerIndex, defenderIndex }) => {
-  const room = Array.from(rooms.values()).find((r) => r.players.includes(attacker));
-  if (!room || !room.gameState) return;
-
-  const gameState = room.gameState;
-
-  if (gameState.turn !== attacker || gameState.phase !== "battle") return;
-
-  const attackerField = gameState.fields[attacker];
-  const defenderField = gameState.fields[defender];
-
-  const attackerCard = attackerField.monsterZones[attackerIndex];
-  const defenderCard = defenderField.monsterZones[defenderIndex];
-
-  if (!attackerCard || !defenderCard) return;
-
-  // 🔥 Standard-Regel: beide zerstört
-  attackerField.monsterZones[attackerIndex] = null;
-  defenderField.monsterZones[defenderIndex] = null;
-
-  attackerField.graveyard.push(attackerCard);
-  defenderField.graveyard.push(defenderCard);
-
-  io.to(room.players[0]).emit("gameUpdated", gameState);
-  io.to(room.players[1]).emit("gameUpdated", gameState);
-});
 
   socket.on("disconnect", () => {
     console.log(`🔴 ${playerName || socket.id} hat die Verbindung getrennt`);

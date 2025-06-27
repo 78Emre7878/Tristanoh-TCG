@@ -104,11 +104,16 @@ function createGameState(players, roomId) {
 
 // Karte ziehen
 function drawCard(gameState, playerName) {
+  if (!gameState || !gameState.zones || !gameState.zones[playerName]) {
+    console.log('❌ drawCard: ungültiger Spieler oder Zustand', { playerName, gameState });
+    return;
+  }
+
   const player = gameState.zones[playerName];
-  if (!player || player.deck.length === 0) return;
-  const card = player.deck.shift();
+  if (player.deck.length === 0) return;
+
+  const card = player.deck.pop();
   player.hand.push(card);
-  return card;
 }
 
 // Karte aufs Feld legen
