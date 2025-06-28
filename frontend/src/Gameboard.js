@@ -1,182 +1,164 @@
 // src/Gameboard.js
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useSocket } from "./SocketContext";
-import "./Gameboard.css";
+import "./styles.css";
 
 function Gameboard({ playerName, gameState, setGameState }) {
   const socket = useSocket();
-  const [phase, setPhase] = useState("draw");
-  const [hand, setHand] = useState([]);
-  const [field, setField] = useState([null, null, null]);
-  const [deckCount, setDeckCount] = useState(0);
-  const [graveyard, setGraveyard] = useState([]);
-  const [shields, setShields] = useState([true, true, true, true, true]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
 
-  const isMyTurn = gameState?.turn === playerName;
-  const roomId = gameState?.roomId || "";
-
-  const opponentName = gameState?.players?.find((p) => p !== playerName);
-  const opponentField = gameState?.fields?.[opponentName] || {};
-  const opponentHandCount = gameState?.hands?.[opponentName]?.length || 0;
-
-  useEffect(() => {
-    if (!gameState || !gameState.fields || !gameState.hands) return;
-
-    const playerData = gameState.fields[playerName];
-    if (!playerData) return;
-
-    setHand(gameState.hands[playerName] || []);
-    setField(playerData.monsterZones || [null, null, null]);
-    setGraveyard(playerData.graveyard || []);
-    setDeckCount(gameState.decks?.[playerName]?.length || 0);
-    setShields(playerData.shields || [true, true, true, true, true]);
-    setPhase(gameState.phase || "draw");
-  }, [gameState, playerName]);
-
-  const drawCard = () => socket.emit("drawCard", { roomId });
-  const endPhase = () => socket.emit("endPhase", { roomId, playerName });
-  const regenerateShield = () => socket.emit("regenerateShield", { roomId });
-
-  const playCard = (handIndex, fieldIndex) => {
-    socket.emit("playCardToField", {
-      playerName,
-      handIndex,
-      fieldIndex,
-      roomId,
-    });
+  const handleDrawCard = () => {
+    socket.emit("drawCard");
   };
 
-  const attackShield = (shieldIndex) => {
-    if (isMyTurn && phase === "battle") {
-      socket.emit("attackShield", {
-        attacker: playerName,
-        target: shieldIndex,
-        roomId,
-      });
+  const handleEndPhase = () => {
+    socket.emit("nextPhase");
+  };
+
+  const handlePlayCard = (handIndex, fieldIndex) => {
+    socket.emit("playCardToField", { handIndex, fieldIndex });
+  };
+
+  const handleRegenerateShield = () => {
+    socket.emit("regenerateShield");
+  };
+
+  const handleAttack = (attackerIndex, defenderIndex) => {
+    socket.emit("attack", { attackerIndex, defenderIndex });
+  };
+
+  const sendMessage = () => {
+    if (chatInput.trim()) {
+      const message = `${playerName}: ${chatInput}`;
+      setChatMessages((prev) => [...prev, message]);
+      setChatInput("");
     }
   };
 
-  const attackMonster = (attackerIndex, defenderIndex) => {
-    if (!isMyTurn || phase !== "battle") return;
-    socket.emit("attackMonster", {
-      attacker: playerName,
-      defender: opponentName,
-      attackerIndex,
-      defenderIndex,
-      roomId,
-    });
+  const renderCard = (card, isBack = false) => {
+    const src = isBack || !card ? "/Cards-Ordner/img/cards/back-side.png" : card.bild;
+    return <img className="card" src={src} alt="card" />;
   };
 
+  const opponent = gameState.players.find((p) => p !== playerName);
+  const yourField = gameState.fields[playerName];
+  const enemyField = gameState.fields[opponent];
+  const yourHand = gameState.hands[playerName];
+  const yourDeck = gameState.decks[playerName];
+
   return (
-    <div className="tristano-board">
-      <div className="phase-bar">
-        <button onClick={drawCard} disabled={!isMyTurn || phase !== "draw"}>
-          Draw
-        </button>
-        <button disabled={!isMyTurn || phase !== "main"}>Main</button>
-        <button disabled={!isMyTurn || phase !== "battle"}>Battle</button>
-        <button onClick={endPhase} disabled={!isMyTurn}>
-          End
-        </button>
-      </div>
-
-      {/* Gegner */}
-      <div className="player-opponent">
-        <div className="deck">Deck</div>
-        <div className="graveyard">Friedhof</div>
-
-        <div className="shields">
-          {opponentField.shields?.map((shield, idx) => (
-            <div className="shield" key={idx}>
-              {shield ? (
-                <img
-                  src="/Cards-Ordner/img/cards/card_back.png"
-                  alt={`Schild ${idx + 1}`}
-                  className="card"
-                  onClick={() => attackShield(idx)}
-                />
-              ) : (
-                <div className="empty">Zerstört</div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="field">
-          {opponentField.monsterZones?.map((card, idx) => (
-            <div className="monsterzone" key={idx}>
-              {card ? (
-                <img
-                  src={card.bild}
-                  alt=""
-                  className="card"
-                  onClick={() => {
-                    const attackerIdx = field.findIndex((c) => c !== null);
-                    if (attackerIdx !== -1)
-                      attackMonster(attackerIdx, idx);
-                  }}
-                />
-              ) : (
-                "Leer"
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="hand">Hand: {opponentHandCount}</div>
-      </div>
-
-      {/* Eigenes Spielfeld */}
-      <div className="player-self">
-        <div className="deck">Deck ({deckCount})</div>
-        <div className="graveyard">Friedhof ({graveyard.length})</div>
-
-        <div className="shields">
-          {shields.map((shield, idx) => (
-            <div className="shield" key={idx}>
-              {shield ? (
-                <img
-                  src="/Cards-Ordner/img/cards/card_back.png"
-                  alt={`Schild ${idx + 1}`}
-                  className="card"
-                />
-              ) : (
-                <div className="empty">Zerstört</div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="field">
-          {field.map((card, idx) => (
-            <div className="monsterzone" key={idx}>
-              {card ? (
-                <img src={card.bild} alt="" className="card" />
-              ) : (
-                "Leer"
-              )}
-            </div>
-          ))}
-        </div>
-
+    <div className="game-container">
+      <div className="enemy-section">
         <div className="hand">
-          {hand.map((card, idx) => (
+          {gameState.hands[opponent].map((_, i) => (
             <img
-              key={idx}
-              src={card.bild}
-              alt={`${card.wert} ${card.symbol}`}
+              key={i}
               className="card"
+              src="/Cards-Ordner/img/cards/back-side.png"
+              alt="back"
+            />
+          ))}
+        </div>
+
+        <div className="shields">
+          {enemyField.shields.map((shield, i) => (
+            <img
+              key={i}
+              className="card"
+              src={
+                shield
+                  ? "/Cards-Ordner/img/cards/back-side.png"
+                  : enemyField.graveyard.find((c) => c.wert === "2" || c.wert === "3")?.bild ||
+                    "/Cards-Ordner/img/cards/back-side.png"
+              }
+              alt="shield"
+            />
+          ))}
+        </div>
+
+        <div className="monster-zones">
+          {enemyField.monsterZones.map((card, i) => (
+            <div key={i}>{renderCard(card)}</div>
+          ))}
+        </div>
+      </div>
+
+      <div className="your-section">
+        <div className="hand">
+          {yourHand.map((card, i) => (
+            <img
+              key={i}
+              className="card"
+              src={card.bild}
+              alt={card.wert}
               onClick={() => {
-                const emptyIndex = field.findIndex((z) => z === null);
-                if (isMyTurn && phase === "main" && emptyIndex !== -1) {
-                  playCard(idx, emptyIndex);
-                }
+                const emptySlot = yourField.monsterZones.findIndex((z) => z === null);
+                if (emptySlot !== -1) handlePlayCard(i, emptySlot);
               }}
             />
           ))}
         </div>
 
-        <button onClick={regenerateShield}>Ass abwerfen für Schild</button>
+        <div className="shields">
+          {yourField.shields.map((shield, i) => (
+            <img
+              key={i}
+              className="card"
+              src={
+                shield
+                  ? "/Cards-Ordner/img/cards/back-side.png"
+                  : yourField.graveyard.find((c) => c.wert === "2" || c.wert === "3")?.bild ||
+                    "/Cards-Ordner/img/cards/back-side.png"
+              }
+              alt="shield"
+            />
+          ))}
+        </div>
+
+        <div className="monster-zones">
+          {yourField.monsterZones.map((card, i) => (
+            <div key={i} onClick={() => handleAttack(i, 0)}>
+              {renderCard(card)}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="controls">
+        <p>Phase: {gameState.phase}</p>
+        <p>Du bist dran: {gameState.turn === playerName ? "✅" : "❌"}</p>
+        <button onClick={handleDrawCard}>Ziehen</button>
+        <button onClick={handleRegenerateShield}>Schild regenerieren</button>
+        <button onClick={handleEndPhase}>Ende Phase</button>
+      </div>
+
+      <div className="side-panel">
+        <div className="deck-info">
+          <img className="card" src="/Cards-Ordner/img/cards/back-side.png" alt="deck" />
+          <span>{yourDeck.length} Karten</span>
+        </div>
+
+        <div className="graveyard-info">
+          <p>Friedhof:</p>
+          {yourField.graveyard.map((card, i) => (
+            <img key={i} className="card" src={card.bild} alt="grave" />
+          ))}
+        </div>
+
+        <div className="chat">
+          <div className="chat-box">
+            {chatMessages.map((m, i) => (
+              <div key={i}>{m}</div>
+            ))}
+          </div>
+          <input
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            placeholder="Nachricht"
+          />
+          <button onClick={sendMessage}>Senden</button>
+        </div>
       </div>
     </div>
   );
