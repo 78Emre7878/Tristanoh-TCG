@@ -5,6 +5,9 @@ import { io } from "socket.io-client";
 // URL vom Backend aus .env-Datei holen oder fallback auf localhost
 const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:3001";
 
+// ⬅️ DEBUG: Zeige zur Laufzeit die URL im Browser (hilft bei Deployment-Problemen)
+console.log("Socket verbindet mit:", backendUrl);
+
 // Verbindung zum Backend herstellen
 const socket = io(backendUrl, {
   transports: ["websocket"],

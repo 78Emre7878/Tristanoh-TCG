@@ -16,10 +16,16 @@ const {
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
+// Serve static frontend
 app.use(cors());
-app.use(express.static(path.join(__dirname, "../frontend/build")));
+app.use(express.static(path.join(__dirname, "build"))); // ✔ wichtig für Render
 
 const lobby = new Map();
 const rooms = new Map();
@@ -234,8 +240,9 @@ io.on("connection", (socket) => {
   }
 });
 
+// Serve index.html for unknown routes (for React-Router)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 const PORT = process.env.PORT || 3001;
