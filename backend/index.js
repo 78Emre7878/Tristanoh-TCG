@@ -1,251 +1,163 @@
+// backend/index.js
 const express = require("express");
 const http = require("http");
-const path = require("path");
 const { Server } = require("socket.io");
-const cors = require("cors");
+const path = require("path");
 const {
-  generateDeck,
-  shuffle,
   createGameState,
-  playCardToField,
   drawCard,
-  moveToGraveyard,
+  playCardToField,
   regenerateShield,
   attackMonsterZone,
+  nextPhase,
+  performAIActions,
 } = require("./gameLogic");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+const io = new Server(server, { cors: { origin: "*" } });
+
+const PORT = process.env.PORT || 3001;
+
+const rooms = {}; // { roomId: { players: [], ready: [], gameState: {}, isAI: false } }
+
+// Serve frontend
+app.use(express.static(path.join(__dirname, "../frontend/build")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
 });
 
-// Serve static frontend
-app.use(cors());
-app.use(express.static(path.join(__dirname, "build"))); // ✔ wichtig für Render
-
-const lobby = new Map();
-const rooms = new Map();
-
 io.on("connection", (socket) => {
-  console.log("🟢 Verbunden:", socket.id);
-  let playerName = "";
+  console.log("Ein Spieler hat sich verbunden: " + socket.id);
 
-  socket.on("joinLobby", ({ playerName: name }) => {
-    if (!name || name.length < 3) {
-      return socket.emit("errorMessage", "Name ist zu kurz oder fehlt.");
-    }
-
-    playerName = name;
-    lobby.set(socket.id, playerName);
-    socket.emit("lobbyJoined", playerName);
-    broadcastLobby();
+  socket.on("joinLobby", ({ playerName }) => {
+    if (!playerName || typeof playerName !== "string") return;
+    socket.data.name = playerName;
+    io.emit("lobbyUpdate", getLobbyData());
   });
 
   socket.on("createRoom", () => {
-    if (!playerName) return socket.emit("errorMessage", "Name fehlt");
-    if (rooms.has(playerName)) {
-      return socket.emit("errorMessage", "Du hast bereits einen Raum.");
-    }
-
-    const gameState = {
-      zones: {
-        [playerName]: {
-          hand: [],
-          field: [],
-          shields: [],
-          deck: [],
-          graveyard: [],
-        },
-      },
-      turn: playerName,
-      phase: "draw",
-    };
-
-    rooms.set(playerName, {
-      players: [playerName],
-      ready: new Set(),
-      gameState,
+    const playerName = socket.data.name;
+    if (!playerName) return;
+    const roomId = generateRoomId();
+    rooms[roomId] = { players: [playerName], ready: [], isAI: false };
+    socket.join(roomId);
+    io.to(socket.id).emit("roomCreated", {
+      id: roomId,
+      players: rooms[roomId].players,
     });
-
-    lobby.delete(socket.id);
-    socket.join(playerName);
-    socket.emit("roomCreated", { id: playerName, players: [playerName] });
-    broadcastLobby();
+    io.emit("lobbyUpdate", getLobbyData());
   });
 
-  socket.on("joinRoom", (hostName) => {
-    const room = rooms.get(hostName);
-    if (!room) return socket.emit("errorMessage", "Raum existiert nicht.");
-    if (room.players.length >= 2) return socket.emit("errorMessage", "Raum ist voll.");
-    if (room.players.includes(playerName)) return;
-
-    room.players.push(playerName);
-    room.ready.delete(playerName);
-    socket.join(hostName);
-    lobby.delete(socket.id);
-    io.to(hostName).emit("roomJoined", { id: hostName, players: room.players });
-    broadcastLobby();
-  });
-
-  socket.on("leaveRoom", () => {
-    for (const [roomId, room] of rooms.entries()) {
-      if (room.players.includes(playerName)) {
-        room.players = room.players.filter((p) => p !== playerName);
-        room.ready.delete(playerName);
-        if (room.players.length === 0) {
-          rooms.delete(roomId);
-        } else {
-          io.to(roomId).emit("roomJoined", { id: roomId, players: room.players });
-        }
-        socket.leave(roomId);
-        break;
-      }
-    }
-    lobby.set(socket.id, playerName);
-    socket.emit("roomLeft");
-    broadcastLobby();
+  socket.on("joinRoom", (roomId) => {
+    const playerName = socket.data.name;
+    if (!playerName || !rooms[roomId] || rooms[roomId].players.length >= 2) return;
+    rooms[roomId].players.push(playerName);
+    socket.join(roomId);
+    io.to(roomId).emit("roomJoined", {
+      id: roomId,
+      players: rooms[roomId].players,
+    });
+    io.emit("lobbyUpdate", getLobbyData());
   });
 
   socket.on("playerReady", (roomId) => {
-    const room = rooms.get(roomId);
-    if (!room) return;
-    room.ready.add(playerName);
-    io.to(roomId).emit("readyStatus", Array.from(room.ready));
-
-    if (room.ready.size === 2 && !room.gameStateStarted) {
-      const gameState = createGameState(room.players, roomId);
-      room.gameState = gameState;
-      room.gameStateStarted = true;
-      io.to(roomId).emit("gameStarted", gameState);
+    const room = rooms[roomId];
+    if (!room || !socket.data.name) return;
+    if (!room.ready.includes(socket.data.name)) {
+      room.ready.push(socket.data.name);
+    }
+    if (room.ready.length === 2 && !room.isAI) {
+      room.gameState = createGameState(room.players, roomId);
+      io.to(roomId).emit("gameStarted", room.gameState);
     }
   });
 
-  socket.on("drawCard", ({ roomId }) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.gameState) return;
-    const card = drawCard(room.gameState, playerName);
-    if (card) {
-      io.to(roomId).emit("gameStateUpdate", room.gameState);
+  socket.on("startAIMatch", ({ playerName }) => {
+    if (!playerName) return;
+    const roomId = generateRoomId();
+    const aiName = "KI-Gegner";
+    rooms[roomId] = {
+      players: [playerName, aiName],
+      ready: [playerName, aiName],
+      isAI: true,
+    };
+    socket.join(roomId);
+    const state = createGameState([playerName, aiName], roomId);
+    rooms[roomId].gameState = state;
+    io.to(roomId).emit("gameStarted", state);
+  });
+
+  socket.on("drawCard", () => {
+    const roomId = getRoomIdForPlayer(socket);
+    const game = rooms[roomId];
+    if (!game) return;
+    drawCard(game.gameState, socket.data.name);
+    io.to(roomId).emit("gameStateUpdate", game.gameState);
+  });
+
+  socket.on("playCardToField", ({ handIndex, fieldIndex }) => {
+    const roomId = getRoomIdForPlayer(socket);
+    const game = rooms[roomId];
+    if (!game) return;
+    playCardToField(game.gameState, socket.data.name, handIndex, fieldIndex);
+    io.to(roomId).emit("gameStateUpdate", game.gameState);
+  });
+
+  socket.on("regenerateShield", () => {
+    const roomId = getRoomIdForPlayer(socket);
+    const game = rooms[roomId];
+    if (!game) return;
+    regenerateShield(game.gameState, socket.data.name);
+    io.to(roomId).emit("gameStateUpdate", game.gameState);
+  });
+
+  socket.on("attack", ({ attackerIndex, defenderIndex }) => {
+    const roomId = getRoomIdForPlayer(socket);
+    const game = rooms[roomId];
+    if (!game) return;
+    const enemy = game.gameState.players.find((p) => p !== socket.data.name);
+    attackMonsterZone(game.gameState, socket.data.name, attackerIndex, enemy, defenderIndex);
+    io.to(roomId).emit("gameStateUpdate", game.gameState);
+  });
+
+  socket.on("nextPhase", () => {
+    const roomId = getRoomIdForPlayer(socket);
+    const game = rooms[roomId];
+    if (!game) return;
+    const { gameState, isAI } = game;
+    const currentPlayer = gameState.turn;
+    nextPhase(gameState);
+    io.to(roomId).emit("gameStateUpdate", gameState);
+    if (isAI && gameState.turn === "KI-Gegner") {
+      setTimeout(() => {
+        performAIActions(gameState, "KI-Gegner");
+        io.to(roomId).emit("gameStateUpdate", gameState);
+      }, 1500);
     }
   });
-
-  socket.on("playCardToField", ({ playerName, handIndex, fieldIndex, roomId }) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.gameState) return;
-    const success = playCardToField(room.gameState, playerName, handIndex, fieldIndex);
-    if (success) {
-      io.to(roomId).emit("gameStateUpdate", room.gameState);
-    } else {
-      socket.emit("errorMessage", "Karte konnte nicht aufs Feld gelegt werden.");
-    }
-  });
-
-  socket.on("destroyCard", ({ roomId, fieldIndex }) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.gameState) return;
-    const success = moveToGraveyard(room.gameState, playerName, fieldIndex);
-    if (success) {
-      io.to(roomId).emit("gameStateUpdate", room.gameState);
-    }
-  });
-
-  socket.on("regenerateShield", ({ roomId }) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.gameState) return;
-    const success = regenerateShield(room.gameState, playerName);
-    if (success) {
-      io.to(roomId).emit("gameStateUpdate", room.gameState);
-    }
-  });
-
-  socket.on("endPhase", ({ roomId }) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.gameState) return;
-
-    const currentPlayer = room.gameState.turn;
-    const nextPlayer = room.players.find((p) => p !== currentPlayer);
-
-    const phases = ["draw", "main", "battle", "end"];
-    const currentPhaseIndex = phases.indexOf(room.gameState.phase);
-
-    if (currentPhaseIndex === -1) return;
-
-    if (room.gameState.phase === "end") {
-      room.gameState.turn = nextPlayer;
-      room.gameState.phase = "draw";
-    } else {
-      room.gameState.phase = phases[currentPhaseIndex + 1];
-    }
-
-    io.to(roomId).emit("gameStateUpdate", room.gameState);
-  });
-
-  socket.on("attackMonster", ({ attacker, defender, attackerIndex, defenderIndex }) => {
-    const room = Array.from(rooms.values()).find((r) => r.players.includes(attacker));
-    if (!room || !room.gameState) return;
-
-    const gameState = room.gameState;
-    if (gameState.turn !== attacker || gameState.phase !== "battle") return;
-
-    const attackerField = gameState.fields[attacker];
-    const defenderField = gameState.fields[defender];
-
-    const attackerCard = attackerField.monsterZones[attackerIndex];
-    const defenderCard = defenderField.monsterZones[defenderIndex];
-
-    if (!attackerCard || !defenderCard) return;
-
-    attackerField.monsterZones[attackerIndex] = null;
-    defenderField.monsterZones[defenderIndex] = null;
-
-    attackerField.graveyard.push(attackerCard);
-    defenderField.graveyard.push(defenderCard);
-
-    room.players.forEach((p) => {
-      io.to(p).emit("gameUpdated", gameState);
-    });
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`🔴 ${playerName || socket.id} hat die Verbindung getrennt`);
-    lobby.delete(socket.id);
-
-    for (const [roomId, room] of rooms.entries()) {
-      if (room.players.includes(playerName)) {
-        room.players = room.players.filter((p) => p !== playerName);
-        room.ready.delete(playerName);
-        if (room.players.length === 0) {
-          rooms.delete(roomId);
-        } else {
-          io.to(roomId).emit("roomJoined", { id: roomId, players: room.players });
-        }
-        break;
-      }
-    }
-
-    broadcastLobby();
-  });
-
-  function broadcastLobby() {
-    const playerNames = Array.from(lobby.values());
-    const roomList = Array.from(rooms.entries()).map(([id, room]) => ({
-      id,
-      players: room.players,
-    }));
-    io.emit("lobbyUpdate", { players: playerNames, rooms: roomList });
-  }
 });
 
-// Serve index.html for unknown routes (for React-Router)
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
+function getLobbyData() {
+  const allRooms = Object.entries(rooms).map(([id, data]) => ({
+    id,
+    players: data.players,
+  }));
+  return { rooms: allRooms };
+}
 
-const PORT = process.env.PORT || 3001;
+function generateRoomId() {
+  return Math.random().toString(36).substr(2, 6);
+}
+
+function getRoomIdForPlayer(socket) {
+  const name = socket.data.name;
+  return Object.entries(rooms).find(([id, room]) =>
+    room.players.includes(name)
+  )?.[0];
+}
+
 server.listen(PORT, () => {
-  console.log(`✅ Server läuft auf Port ${PORT}`);
+  console.log("✅ Server läuft auf Port " + PORT);
 });
